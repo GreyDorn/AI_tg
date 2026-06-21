@@ -57,6 +57,7 @@ async def successful_payment(
 ) -> None:
     payment: SuccessfulPayment = message.successful_payment
     payload = payment.invoice_payload  # "pack_id:user_id"
+    charge_id = payment.telegram_payment_charge_id  # нужен для возврата
 
     pack_id = payload.split(":")[0]
     pack = CREDIT_PACKAGES.get(pack_id)
@@ -68,8 +69,8 @@ async def successful_payment(
     new_balance = await add_credits(db_session, db_user.id, credits)
 
     logger.info(
-        "Пользователь %s купил пакет %s (%d stars → %d credits). Баланс: %d",
-        db_user.id, pack_id, stars, credits, new_balance,
+        "Платёж: user=%s pack=%s stars=%d credits=%d balance=%d charge_id=%s",
+        db_user.id, pack_id, stars, credits, new_balance, charge_id,
     )
 
     await message.answer(
