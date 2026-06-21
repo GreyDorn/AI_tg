@@ -38,6 +38,7 @@ async def process_subscribe_callback(callback: CallbackQuery) -> None:
         title="Безлимитная подписка на 30 дней",
         description=f"Неограниченные запросы ко всем AI-моделям на {SUBSCRIPTION_DAYS} дней",
         payload=f"subscription:{callback.from_user.id}",
+        provider_token="",
         currency="XTR",
         prices=[LabeledPrice(label=f"Подписка {SUBSCRIPTION_DAYS} дней", amount=SUBSCRIPTION_PRICE_STARS)],
     )
