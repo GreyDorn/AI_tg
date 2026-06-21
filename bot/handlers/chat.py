@@ -36,7 +36,7 @@ def _split_text(text: str, limit: int = TG_MAX_LENGTH) -> list[str]:
     return parts
 
 
-@router.message(F.text & ~F.text.startswith("/") & ~F.text.in_({"💬 Новый чат", "🤖 Модели", "💰 Баланс", "👥 Реферал"}))
+@router.message(F.text & ~F.text.startswith("/") & ~F.text.in_({"💬 Новый чат", "🤖 Модели", "💰 Баланс", "👥 Реферал", "💳 Купить кредиты"}))
 async def handle_message(message: Message, db_session: AsyncSession, db_user: User) -> None:
     model_key = db_user.current_model
     model_cfg = MODELS[model_key]
@@ -111,6 +111,13 @@ async def handle_message(message: Message, db_session: AsyncSession, db_user: Us
                 f"Выбери другую модель 👇",
                 parse_mode="HTML",
                 reply_markup=models_keyboard(model_key),
+            )
+        elif "too large" in error_str.lower() or "entity too large" in error_str.lower() or "context" in error_str.lower():
+            await reply.edit_text(
+                f"📝 <b>Контекст диалога слишком большой</b>\n\n"
+                f"Начни новый чат командой /newchat или кнопкой <b>💬 Новый чат</b> — "
+                f"это очистит историю и позволит продолжить.",
+                parse_mode="HTML",
             )
         else:
             await reply.edit_text(
