@@ -1,0 +1,19 @@
+# Секреты — никогда не коммитить
+.env
+
+# База данных
+*.db
+*.db-journal
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
