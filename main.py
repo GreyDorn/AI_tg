@@ -9,7 +9,7 @@ from db.repository import init_db, SessionFactory, grant_unlimited
 from bot.middlewares.user import UserMiddleware
 from bot.middlewares.ratelimit import RateLimitMiddleware
 from bot.middlewares.processing_lock import ProcessingLockMiddleware
-from bot.handlers import start, chat, models, balance, admin
+from bot.handlers import start, chat, models, balance, admin, payment
 
 sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
@@ -46,6 +46,7 @@ async def main() -> None:
     dp.include_router(models.router)
     dp.include_router(balance.router)
     dp.include_router(admin.router)
+    dp.include_router(payment.router)
     dp.include_router(chat.router)
 
     logger.info("Бот запущен")

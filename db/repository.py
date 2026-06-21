@@ -77,6 +77,16 @@ async def spend_credits(session: AsyncSession, user_id: int, amount: int) -> boo
     return True
 
 
+async def add_credits(session: AsyncSession, user_id: int, amount: int) -> int:
+    """Начисляет кредиты. Возвращает новый баланс."""
+    user = await session.get(User, user_id)
+    if not user:
+        return 0
+    user.credits += amount
+    await session.commit()
+    return user.credits
+
+
 async def claim_daily_credits(session: AsyncSession, user_id: int) -> bool:
     """Начисляет ежедневные кредиты. Возвращает False если уже получены сегодня."""
     user = await session.get(User, user_id)

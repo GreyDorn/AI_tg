@@ -71,6 +71,15 @@ MODELS: Dict[str, LLMModel] = {
 
 DEFAULT_MODEL = "llama-3.3-70b"
 
+# Пакеты покупки кредитов за Telegram Stars
+# ключ — id пакета, значение — (stars, credits, label)
+CREDIT_PACKAGES = {
+    "pack_15":  (15,  15,  "15 ⭐ → 15 🔥"),
+    "pack_50":  (50,  60,  "50 ⭐ → 60 🔥 (+20%)"),
+    "pack_100": (100, 130, "100 ⭐ → 130 🔥 (+30%)"),
+    "pack_300": (300, 420, "300 ⭐ → 420 🔥 (+40%)"),
+}
+
 # Защита от флуда
 RATE_LIMIT_MESSAGES = 5     # макс. сообщений
 RATE_LIMIT_WINDOW = 60      # за N секунд

@@ -43,13 +43,15 @@ async def cmd_help(message: Message, db_user: User) -> None:
         f"/newchat — начать новый диалог\n"
         f"/models — выбрать модель\n"
         f"/balance — баланс кредитов\n"
+        f"/buy — купить кредиты за ⭐ Stars\n"
         f"/referral — реферальная программа\n"
         f"/help — эта справка\n\n"
         f"<b>Доступные модели:</b>\n{models_text}\n\n"
         f"<b>Кредиты:</b>\n"
         f"• {FREE_CREDITS_ON_START}🔥 при регистрации\n"
         f"• {DAILY_FREE_CREDITS}🔥 каждый день\n"
-        f"• {REFERRAL_BONUS_CREDITS}🔥 за каждого приглашённого друга",
+        f"• {REFERRAL_BONUS_CREDITS}🔥 за каждого приглашённого друга\n"
+        f"• Купить за Telegram Stars ⭐ → /buy",
         parse_mode="HTML",
     )
 

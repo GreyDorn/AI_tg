@@ -1,6 +1,6 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from config import MODELS, DEFAULT_MODEL
+from config import MODELS, DEFAULT_MODEL, CREDIT_PACKAGES
 
 
 def main_menu() -> ReplyKeyboardMarkup:
@@ -8,6 +8,7 @@ def main_menu() -> ReplyKeyboardMarkup:
         keyboard=[
             [KeyboardButton(text="💬 Новый чат"), KeyboardButton(text="🤖 Модели")],
             [KeyboardButton(text="💰 Баланс"), KeyboardButton(text="👥 Реферал")],
+            [KeyboardButton(text="💳 Купить кредиты")],
         ],
         resize_keyboard=True,
     )
@@ -38,3 +39,11 @@ def referral_keyboard(bot_username: str, user_id: int) -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="📤 Поделиться ссылкой", url=f"https://t.me/share/url?url={ref_link}&text=Попробуй%20AI%20бот!")]
         ]
     )
+
+
+def buy_packages_keyboard() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for pack_id, (stars, credits, label) in CREDIT_PACKAGES.items():
+        builder.button(text=label, callback_data=f"buy:{pack_id}")
+    builder.adjust(1)
+    return builder.as_markup()
