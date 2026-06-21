@@ -1,6 +1,6 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from config import MODELS, DEFAULT_MODEL, CREDIT_PACKAGES
+from config import MODELS, DEFAULT_MODEL, SUBSCRIPTION_PRICE_STARS
 
 
 def main_menu() -> ReplyKeyboardMarkup:
@@ -8,7 +8,7 @@ def main_menu() -> ReplyKeyboardMarkup:
         keyboard=[
             [KeyboardButton(text="💬 Новый чат"), KeyboardButton(text="🤖 Модели")],
             [KeyboardButton(text="💰 Баланс"), KeyboardButton(text="👥 Реферал")],
-            [KeyboardButton(text="💳 Купить кредиты")],
+            [KeyboardButton(text="💎 Подписка")],
         ],
         resize_keyboard=True,
     )
@@ -19,7 +19,7 @@ def models_keyboard(current_model: str) -> InlineKeyboardMarkup:
     for key, model in MODELS.items():
         mark = "✅ " if key == current_model else ""
         builder.button(
-            text=f"{mark}{model.name} — {model.cost_per_message}🔥/msg",
+            text=f"{mark}{model.name}",
             callback_data=f"model:{key}",
         )
     builder.adjust(1)
@@ -41,9 +41,12 @@ def referral_keyboard(bot_username: str, user_id: int) -> InlineKeyboardMarkup:
     )
 
 
-def buy_packages_keyboard() -> InlineKeyboardMarkup:
-    builder = InlineKeyboardBuilder()
-    for pack_id, (stars, credits, label) in CREDIT_PACKAGES.items():
-        builder.button(text=label, callback_data=f"buy:{pack_id}")
-    builder.adjust(1)
-    return builder.as_markup()
+def subscription_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(
+                text=f"Оформить подписку — {SUBSCRIPTION_PRICE_STARS} ⭐",
+                callback_data="subscribe",
+            )]
+        ]
+    )

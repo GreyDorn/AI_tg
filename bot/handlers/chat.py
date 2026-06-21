@@ -36,17 +36,17 @@ def _split_text(text: str, limit: int = TG_MAX_LENGTH) -> list[str]:
     return parts
 
 
-@router.message(F.text & ~F.text.startswith("/") & ~F.text.in_({"💬 Новый чат", "🤖 Модели", "💰 Баланс", "👥 Реферал", "💳 Купить кредиты"}))
+@router.message(F.text & ~F.text.startswith("/") & ~F.text.in_({"💬 Новый чат", "🤖 Модели", "💰 Баланс", "👥 Реферал", "💎 Подписка"}))
 async def handle_message(message: Message, db_session: AsyncSession, db_user: User) -> None:
     model_key = db_user.current_model
     model_cfg = MODELS[model_key]
 
-    if db_user.credits < model_cfg.cost_per_message and not db_user.is_unlimited:
+    if db_user.credits < model_cfg.cost_per_message and not db_user.has_unlimited_access:
         await message.answer(
-            f"❌ <b>Недостаточно кредитов</b>\n\n"
-            f"У тебя: <b>{db_user.credits}🔥</b>\n"
-            f"Нужно: <b>{model_cfg.cost_per_message}🔥</b>\n\n"
-            f"Нажми <b>💰 Баланс</b>, чтобы пополнить.",
+            f"❌ <b>Запросы закончились</b>\n\n"
+            f"У тебя осталось: <b>{db_user.credits}</b>\n\n"
+            f"Приходи завтра за бесплатными запросами 🎁\n"
+            f"Или оформи безлимитную подписку → /buy",
             parse_mode="HTML",
         )
         return
@@ -60,7 +60,7 @@ async def handle_message(message: Message, db_session: AsyncSession, db_user: Us
     all_messages = await get_conversation_messages(db_session, conv.id)
     context = all_messages[-MAX_CONTEXT_MESSAGES:]
 
-    await spend_credits(db_session, db_user.id, model_cfg.cost_per_message) if not db_user.is_unlimited else None
+    await spend_credits(db_session, db_user.id, model_cfg.cost_per_message) if not db_user.has_unlimited_access else None
     await message.bot.send_chat_action(message.chat.id, "typing")
 
     reply = await message.answer("⏳")

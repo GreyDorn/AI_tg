@@ -7,7 +7,7 @@ from db.repository import SessionFactory, get_or_create_user, claim_daily_credit
 class UserMiddleware(BaseMiddleware):
     """
     Регистрирует пользователя при первом обращении,
-    начисляет ежедневные кредиты, добавляет сессию БД в data.
+    начисляет ежедневные запросы, проверяет истечение подписки.
     """
 
     async def __call__(
@@ -20,7 +20,6 @@ class UserMiddleware(BaseMiddleware):
         if not tg_user:
             return await handler(event, data)
 
-        # Извлекаем реферальный параметр из команды /start ref<id>
         referred_by: int | None = None
         if isinstance(event, Update) and event.message and event.message.text:
             parts = event.message.text.split(maxsplit=1)

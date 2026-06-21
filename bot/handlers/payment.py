@@ -6,41 +6,40 @@ from aiogram.types import (
     PreCheckoutQuery, SuccessfulPayment,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
-from config import CREDIT_PACKAGES
+from config import SUBSCRIPTION_PRICE_STARS, SUBSCRIPTION_DAYS
 from db.models import User
-from db.repository import add_credits
-from bot.keyboards.main import buy_packages_keyboard
+from db.repository import activate_subscription
+from bot.keyboards.main import subscription_keyboard
 
 router = Router()
 logger = logging.getLogger(__name__)
 
 
 @router.message(Command("buy"))
-@router.message(F.text == "💳 Купить кредиты")
+@router.message(F.text == "💎 Подписка")
 async def cmd_buy(message: Message, db_user: User) -> None:
+    sub_status = ""
+    if db_user.has_unlimited_access and db_user.subscription_until:
+        sub_status = f"\n\n✨ <b>Твоя подписка активна</b> до <b>{db_user.subscription_until.strftime('%d.%m.%Y')}</b>\nПри оплате — продлится ещё на {SUBSCRIPTION_DAYS} дней."
+
     await message.answer(
-        "💳 <b>Купить кредиты</b>\n\n"
-        "Кредиты тратятся на запросы к AI.\n"
-        "Выбери пакет — оплата в Telegram Stars ⭐:",
-        reply_markup=buy_packages_keyboard(),
+        f"💎 <b>Безлимитная подписка</b>\n\n"
+        f"• Неограниченное количество запросов\n"
+        f"• Все модели без ограничений\n"
+        f"• {SUBSCRIPTION_DAYS} дней доступа{sub_status}\n\n"
+        f"Стоимость: <b>{SUBSCRIPTION_PRICE_STARS} ⭐ Stars / месяц</b>",
+        reply_markup=subscription_keyboard(),
     )
 
 
-@router.callback_query(F.data.startswith("buy:"))
-async def process_buy_callback(callback: CallbackQuery) -> None:
-    pack_id = callback.data.split(":", 1)[1]
-    pack = CREDIT_PACKAGES.get(pack_id)
-    if not pack:
-        await callback.answer("Пакет не найден", show_alert=True)
-        return
-
-    stars, credits, label = pack
+@router.callback_query(F.data == "subscribe")
+async def process_subscribe_callback(callback: CallbackQuery) -> None:
     await callback.message.answer_invoice(
-        title=f"Пакет: {credits} кредитов",
-        description=f"Пополнение баланса на {credits} 🔥 кредитов для AI-запросов",
-        payload=f"{pack_id}:{callback.from_user.id}",
+        title="Безлимитная подписка на 30 дней",
+        description=f"Неограниченные запросы ко всем AI-моделям на {SUBSCRIPTION_DAYS} дней",
+        payload=f"subscription:{callback.from_user.id}",
         currency="XTR",
-        prices=[LabeledPrice(label=label, amount=stars)],
+        prices=[LabeledPrice(label=f"Подписка {SUBSCRIPTION_DAYS} дней", amount=SUBSCRIPTION_PRICE_STARS)],
     )
     await callback.answer()
 
@@ -56,25 +55,16 @@ async def successful_payment(
     message: Message, db_session: AsyncSession, db_user: User
 ) -> None:
     payment: SuccessfulPayment = message.successful_payment
-    payload = payment.invoice_payload  # "pack_id:user_id"
-    charge_id = payment.telegram_payment_charge_id  # нужен для возврата
+    charge_id = payment.telegram_payment_charge_id
 
-    pack_id = payload.split(":")[0]
-    pack = CREDIT_PACKAGES.get(pack_id)
-    if not pack:
-        logger.error("Получен платёж с неизвестным payload: %s", payload)
-        return
-
-    stars, credits, label = pack
-    new_balance = await add_credits(db_session, db_user.id, credits)
+    subscription_until = await activate_subscription(db_session, db_user.id, SUBSCRIPTION_DAYS)
 
     logger.info(
-        "Платёж: user=%s pack=%s stars=%d credits=%d balance=%d charge_id=%s",
-        db_user.id, pack_id, stars, credits, new_balance, charge_id,
+        "Подписка: user=%s до %s charge_id=%s",
+        db_user.id, subscription_until, charge_id,
     )
 
     await message.answer(
-        f"✅ <b>Оплата прошла успешно!</b>\n\n"
-        f"Начислено: <b>{credits} 🔥 кредитов</b>\n"
-        f"Ваш баланс: <b>{new_balance} 🔥</b>",
+        f"✅ <b>Подписка активирована!</b>\n\n"
+        f"Безлимитный доступ ко всем моделям до <b>{subscription_until.strftime('%d.%m.%Y')}</b> 🎉",
     )

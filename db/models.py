@@ -15,10 +15,22 @@ class User(Base):
     full_name: Mapped[str] = mapped_column(String(256))
     credits: Mapped[int] = mapped_column(Integer, default=0)
     is_unlimited: Mapped[bool] = mapped_column(Boolean, default=False)
+    subscription_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     current_model: Mapped[str] = mapped_column(String(64), default="llama-3.3-70b")
     referred_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"))
     daily_credits_claimed_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    conversations: Mapped[list["Conversation"]] = relationship(back_populates="user")
+
+    @property
+    def has_unlimited_access(self) -> bool:
+        """True если у пользователя безлимитный доступ (постоянный или по подписке)."""
+        if self.is_unlimited:
+            return True
+        if self.subscription_until and self.subscription_until > datetime.now():
+            return True
+        return False
 
     conversations: Mapped[list["Conversation"]] = relationship(back_populates="user")
 

@@ -12,16 +12,14 @@ SessionFactory = async_sessionmaker(engine, expire_on_commit=False)
 async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        # Добавляем колонку если её ещё нет (для существующих БД)
-        await conn.execute(text(
-            "ALTER TABLE users ADD COLUMN is_unlimited INTEGER NOT NULL DEFAULT 0"
-        ).execution_options(autocommit=True)) if False else None
-        try:
-            await conn.execute(text(
-                "ALTER TABLE users ADD COLUMN is_unlimited INTEGER NOT NULL DEFAULT 0"
-            ))
-        except Exception:
-            pass  # Колонка уже существует
+        for column_sql in [
+            "ALTER TABLE users ADD COLUMN is_unlimited INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN subscription_until DATETIME",
+        ]:
+            try:
+                await conn.execute(text(column_sql))
+            except Exception:
+                pass  # Колонка уже существует
 
 
 # ── Users ──────────────────────────────────────────────────────────────────────
@@ -156,10 +154,24 @@ async def clear_conversation_messages(
 
 
 async def grant_unlimited(session: AsyncSession, user_id: int) -> bool:
-    """Выдаёт безлимит пользователю. Возвращает False если пользователь не найден."""
+    """Выдаёт постоянный безлимит пользователю (для администраторов)."""
     user = await session.get(User, user_id)
     if not user:
         return False
     user.is_unlimited = True
     await session.commit()
     return True
+
+
+async def activate_subscription(session: AsyncSession, user_id: int, days: int = 30) -> datetime:
+    """Активирует платную подписку на N дней. Возвращает дату окончания."""
+    from datetime import timedelta
+    user = await session.get(User, user_id)
+    if not user:
+        return None
+    now = datetime.now()
+    # Если подписка ещё активна — продлеваем от текущего конца
+    base = user.subscription_until if user.subscription_until and user.subscription_until > now else now
+    user.subscription_until = base + timedelta(days=days)
+    await session.commit()
+    return user.subscription_until
