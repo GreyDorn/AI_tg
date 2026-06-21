@@ -6,9 +6,9 @@ from config import MODELS, DEFAULT_MODEL, SUBSCRIPTION_PRICE_STARS
 def main_menu() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="💬 Новый чат"), KeyboardButton(text="🤖 Модели")],
-            [KeyboardButton(text="💰 Баланс"), KeyboardButton(text="👥 Реферал")],
-            [KeyboardButton(text="💎 Подписка")],
+            [KeyboardButton(text="💬 New Chat"), KeyboardButton(text="🤖 Models")],
+            [KeyboardButton(text="💰 Balance"), KeyboardButton(text="👥 Referral")],
+            [KeyboardButton(text="💎 Subscription")],
         ],
         resize_keyboard=True,
     )
@@ -28,7 +28,7 @@ def models_keyboard(current_model: str) -> InlineKeyboardMarkup:
 
 def cancel_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="❌ Отмена", callback_data="cancel")]]
+        inline_keyboard=[[InlineKeyboardButton(text="❌ Cancel", callback_data="cancel")]]
     )
 
 
@@ -36,7 +36,7 @@ def referral_keyboard(bot_username: str, user_id: int) -> InlineKeyboardMarkup:
     ref_link = f"https://t.me/{bot_username}?start=ref{user_id}"
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="📤 Поделиться ссылкой", url=f"https://t.me/share/url?url={ref_link}&text=Попробуй%20AI%20бот!")]
+            [InlineKeyboardButton(text="📤 Share Link", url=f"https://t.me/share/url?url={ref_link}&text=Try%20this%20AI%20bot!")]
         ]
     )
 
@@ -45,7 +45,7 @@ def subscription_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(
-                text=f"Оформить подписку — {SUBSCRIPTION_PRICE_STARS} ⭐",
+                text=f"Subscribe — {SUBSCRIPTION_PRICE_STARS} ⭐",
                 callback_data="subscribe",
             )]
         ]

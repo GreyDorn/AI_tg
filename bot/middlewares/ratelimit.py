@@ -38,14 +38,13 @@ class RateLimitMiddleware(BaseMiddleware):
             history.popleft()
 
         if len(history) >= RATE_LIMIT_MESSAGES:
-            # Считаем сколько секунд осталось до разблокировки
             wait_seconds = int(RATE_LIMIT_WINDOW - (now - history[0])) + 1
             await raw.answer(
-                f"⏱ <b>Слишком много запросов</b>\n\n"
-                f"Подожди <b>{wait_seconds} сек.</b> перед следующим сообщением.",
+                f"⏱ <b>Too many requests</b>\n\n"
+                f"Please wait <b>{wait_seconds} sec.</b> before sending the next message.",
                 parse_mode="HTML",
             )
-            return  # не передаём дальше
+            return
 
         history.append(now)
         return await handler(event, data)

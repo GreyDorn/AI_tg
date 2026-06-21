@@ -16,18 +16,18 @@ logger = logging.getLogger(__name__)
 
 
 @router.message(Command("buy"))
-@router.message(F.text == "💎 Подписка")
+@router.message(F.text == "💎 Subscription")
 async def cmd_buy(message: Message, db_user: User) -> None:
     sub_status = ""
     if db_user.has_unlimited_access and db_user.subscription_until:
-        sub_status = f"\n\n✨ <b>Твоя подписка активна</b> до <b>{db_user.subscription_until.strftime('%d.%m.%Y')}</b>\nПри оплате — продлится ещё на {SUBSCRIPTION_DAYS} дней."
+        sub_status = f"\n\n✨ <b>Your subscription is active</b> until <b>{db_user.subscription_until.strftime('%d.%m.%Y')}</b>\nA new payment will extend it by {SUBSCRIPTION_DAYS} more days."
 
     await message.answer(
-        f"💎 <b>Безлимитная подписка</b>\n\n"
-        f"• Неограниченное количество запросов\n"
-        f"• Все модели без ограничений\n"
-        f"• {SUBSCRIPTION_DAYS} дней доступа{sub_status}\n\n"
-        f"Стоимость: <b>{SUBSCRIPTION_PRICE_STARS} ⭐ Stars / месяц</b>",
+        f"💎 <b>Unlimited Subscription</b>\n\n"
+        f"• Unlimited requests to all models\n"
+        f"• All models, no restrictions\n"
+        f"• {SUBSCRIPTION_DAYS} days of access{sub_status}\n\n"
+        f"Price: <b>{SUBSCRIPTION_PRICE_STARS} ⭐ Stars / month</b>",
         reply_markup=subscription_keyboard(),
     )
 
@@ -36,18 +36,17 @@ async def cmd_buy(message: Message, db_user: User) -> None:
 async def process_subscribe_callback(callback: CallbackQuery) -> None:
     await callback.bot.send_invoice(
         chat_id=callback.from_user.id,
-        title="Безлимитная подписка на 30 дней",
-        description=f"Неограниченные запросы ко всем AI-моделям на {SUBSCRIPTION_DAYS} дней",
+        title="Unlimited Subscription — 30 days",
+        description=f"Unlimited requests to all AI models for {SUBSCRIPTION_DAYS} days",
         payload=f"subscription:{callback.from_user.id}",
         currency="XTR",
-        prices=[LabeledPrice(label=f"Подписка {SUBSCRIPTION_DAYS} дней", amount=SUBSCRIPTION_PRICE_STARS)],
+        prices=[LabeledPrice(label=f"{SUBSCRIPTION_DAYS}-day Subscription", amount=SUBSCRIPTION_PRICE_STARS)],
     )
     await callback.answer()
 
 
 @router.pre_checkout_query()
 async def pre_checkout(query: PreCheckoutQuery) -> None:
-    """Telegram требует ответить в течение 10 секунд."""
     await query.answer(ok=True)
 
 
@@ -61,11 +60,11 @@ async def successful_payment(
     subscription_until = await activate_subscription(db_session, db_user.id, SUBSCRIPTION_DAYS)
 
     logger.info(
-        "Подписка: user=%s до %s charge_id=%s",
+        "Subscription: user=%s until=%s charge_id=%s",
         db_user.id, subscription_until, charge_id,
     )
 
     await message.answer(
-        f"✅ <b>Подписка активирована!</b>\n\n"
-        f"Безлимитный доступ ко всем моделям до <b>{subscription_until.strftime('%d.%m.%Y')}</b> 🎉",
+        f"✅ <b>Subscription activated!</b>\n\n"
+        f"Unlimited access to all models until <b>{subscription_until.strftime('%d.%m.%Y')}</b> 🎉",
     )

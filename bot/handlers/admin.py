@@ -17,8 +17,8 @@ async def cmd_grant(message: Message, db_session: AsyncSession, db_user: User) -
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2 or not parts[1].strip().isdigit():
         await message.answer(
-            "Использование: <code>/grant USER_ID</code>\n\n"
-            "Пример: <code>/grant 123456789</code>",
+            "Usage: <code>/grant USER_ID</code>\n\n"
+            "Example: <code>/grant 123456789</code>",
             parse_mode="HTML",
         )
         return
@@ -30,12 +30,12 @@ async def cmd_grant(message: Message, db_session: AsyncSession, db_user: User) -
         target = await get_user(db_session, target_id)
         name = target.full_name if target else str(target_id)
         await message.answer(
-            f"✅ Безлимит выдан: <b>{name}</b> (ID: <code>{target_id}</code>)",
+            f"✅ Unlimited access granted to <b>{name}</b> (ID: <code>{target_id}</code>)",
             parse_mode="HTML",
         )
     else:
         await message.answer(
-            f"❌ Пользователь <code>{target_id}</code> не найден.\n"
-            f"Он должен сначала написать боту /start.",
+            f"❌ User <code>{target_id}</code> not found.\n"
+            f"They need to start the bot first with /start.",
             parse_mode="HTML",
         )

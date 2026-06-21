@@ -13,16 +13,16 @@ router = Router()
 @router.message(CommandStart())
 async def cmd_start(message: Message, db_session: AsyncSession, db_user: User) -> None:
     await message.answer(
-        f"👋 <b>Привет, {message.from_user.first_name}!</b>\n\n"
-        f"Я AI-ассистент с несколькими языковыми моделями.\n\n"
-        f"🎁 <b>Тебе доступно {FREE_CREDITS_ON_START} бесплатных запросов</b> для знакомства!\n"
-        f"Каждый день — ещё <b>+{DAILY_FREE_CREDITS} бесплатных запроса</b>.\n\n"
-        f"<b>Что умею:</b>\n"
-        f"• Отвечать на вопросы\n"
-        f"• Писать код и тексты\n"
-        f"• Анализировать и объяснять\n"
-        f"• Переводить и редактировать\n\n"
-        f"Просто напиши мне сообщение 👇",
+        f"👋 <b>Hey, {message.from_user.first_name}!</b>\n\n"
+        f"I'm an AI assistant with multiple language models.\n\n"
+        f"🎁 <b>You get {FREE_CREDITS_ON_START} free requests</b> to get started!\n"
+        f"Every day — another <b>+{DAILY_FREE_CREDITS} free requests</b>.\n\n"
+        f"<b>What I can do:</b>\n"
+        f"• Answer questions\n"
+        f"• Write code and content\n"
+        f"• Analyze and explain\n"
+        f"• Translate and edit\n\n"
+        f"Just send me a message 👇",
         parse_mode="HTML",
         reply_markup=main_menu(),
     )
@@ -36,31 +36,31 @@ async def cmd_help(message: Message) -> None:
         for m in MODELS.values()
     )
     await message.answer(
-        f"<b>📚 Помощь</b>\n\n"
-        f"<b>Команды:</b>\n"
-        f"/start — главное меню\n"
-        f"/newchat — начать новый диалог\n"
-        f"/models — выбрать модель\n"
-        f"/balance — баланс запросов\n"
-        f"/buy — безлимитная подписка\n"
-        f"/referral — реферальная программа\n"
-        f"/help — эта справка\n\n"
-        f"<b>Доступные модели:</b>\n{models_text}\n\n"
-        f"<b>Бесплатные запросы:</b>\n"
-        f"• {FREE_CREDITS_ON_START} запросов при регистрации\n"
-        f"• +{DAILY_FREE_CREDITS} каждый день\n"
-        f"• +{REFERRAL_BONUS_CREDITS} за каждого приглашённого друга\n\n"
-        f"💎 <b>Безлимитная подписка</b> — {SUBSCRIPTION_PRICE_STARS} ⭐/месяц",
+        f"<b>📚 Help</b>\n\n"
+        f"<b>Commands:</b>\n"
+        f"/start — main menu\n"
+        f"/newchat — start a new conversation\n"
+        f"/models — choose a model\n"
+        f"/balance — your request balance\n"
+        f"/buy — unlimited subscription\n"
+        f"/referral — referral program\n"
+        f"/help — this help message\n\n"
+        f"<b>Available models:</b>\n{models_text}\n\n"
+        f"<b>Free requests:</b>\n"
+        f"• {FREE_CREDITS_ON_START} requests on registration\n"
+        f"• +{DAILY_FREE_CREDITS} every day\n"
+        f"• +{REFERRAL_BONUS_CREDITS} for each referred friend\n\n"
+        f"💎 <b>Unlimited subscription</b> — {SUBSCRIPTION_PRICE_STARS} ⭐/month",
         parse_mode="HTML",
     )
 
 
 @router.message(Command("newchat"))
-@router.message(lambda m: m.text == "💬 Новый чат")
+@router.message(lambda m: m.text == "💬 New Chat")
 async def cmd_newchat(message: Message, db_session: AsyncSession, db_user: User) -> None:
-    conv = await create_conversation(db_session, db_user.id, db_user.current_model)
+    await create_conversation(db_session, db_user.id, db_user.current_model)
     await message.answer(
-        f"✅ Новый диалог начат!\n"
-        f"Модель: <b>{MODELS[db_user.current_model].name}</b>",
+        f"✅ New conversation started!\n"
+        f"Model: <b>{MODELS[db_user.current_model].name}</b>",
         parse_mode="HTML",
     )

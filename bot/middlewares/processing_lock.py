@@ -37,7 +37,7 @@ class ProcessingLockMiddleware(BaseMiddleware):
 
         if user_id in self._processing:
             await raw.answer(
-                "⏳ Подожди, я ещё обрабатываю твой предыдущий запрос..."
+                "⏳ Please wait, I'm still processing your previous request..."
             )
             return
 

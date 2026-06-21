@@ -36,17 +36,17 @@ def _split_text(text: str, limit: int = TG_MAX_LENGTH) -> list[str]:
     return parts
 
 
-@router.message(F.text & ~F.text.startswith("/") & ~F.text.in_({"💬 Новый чат", "🤖 Модели", "💰 Баланс", "👥 Реферал", "💎 Подписка"}))
+@router.message(F.text & ~F.text.startswith("/") & ~F.text.in_({"💬 New Chat", "🤖 Models", "💰 Balance", "👥 Referral", "💎 Subscription"}))
 async def handle_message(message: Message, db_session: AsyncSession, db_user: User) -> None:
     model_key = db_user.current_model
     model_cfg = MODELS[model_key]
 
     if db_user.credits < model_cfg.cost_per_message and not db_user.has_unlimited_access:
         await message.answer(
-            f"❌ <b>Запросы закончились</b>\n\n"
-            f"У тебя осталось: <b>{db_user.credits}</b>\n\n"
-            f"Приходи завтра за бесплатными запросами 🎁\n"
-            f"Или оформи безлимитную подписку → /buy",
+            f"❌ <b>Out of requests</b>\n\n"
+            f"You have: <b>{db_user.credits}</b>\n\n"
+            f"Come back tomorrow for free requests 🎁\n"
+            f"Or get unlimited access → /buy",
             parse_mode="HTML",
         )
         return
@@ -74,7 +74,7 @@ async def handle_message(message: Message, db_session: AsyncSession, db_user: Us
             full_response += chunk
             now = asyncio.get_event_loop().time()
             if now - last_edit_time >= STREAM_EDIT_INTERVAL:
-                # Показываем только первые TG_MAX_LENGTH символов во время стриминга
+                # show preview during streaming (last TG_MAX_LENGTH chars)
                 preview = full_response[-TG_MAX_LENGTH + 3:] if len(full_response) > TG_MAX_LENGTH else full_response
                 try:
                     await reply.edit_text(preview + " ▌")
@@ -83,10 +83,9 @@ async def handle_message(message: Message, db_session: AsyncSession, db_user: Us
                     pass
 
         if not full_response:
-            await reply.edit_text("⚠️ Пустой ответ от модели.")
+            await reply.edit_text("⚠️ The model returned an empty response.")
             return
 
-        # Разбиваем финальный ответ на части если длиннее лимита
         parts = _split_text(full_response)
         await reply.edit_text(parts[0])
         for part in parts[1:]:
@@ -98,31 +97,31 @@ async def handle_message(message: Message, db_session: AsyncSession, db_user: Us
 
         if "429" in error_str or "quota" in error_str.lower() or "rate" in error_str.lower():
             await reply.edit_text(
-                f"⏳ <b>Модель временно перегружена</b>\n\n"
-                f"<b>{model_cfg.name}</b> исчерпала лимит запросов.\n\n"
-                f"Выбери другую модель 👇",
+                f"⏳ <b>Model is overloaded</b>\n\n"
+                f"<b>{model_cfg.name}</b> has reached its request limit.\n\n"
+                f"Choose another model 👇",
                 parse_mode="HTML",
                 reply_markup=models_keyboard(model_key),
             )
         elif "decommissioned" in error_str or "not supported" in error_str:
             await reply.edit_text(
-                f"❌ <b>Модель недоступна</b>\n\n"
-                f"<b>{model_cfg.name}</b> была отключена провайдером.\n\n"
-                f"Выбери другую модель 👇",
+                f"❌ <b>Model unavailable</b>\n\n"
+                f"<b>{model_cfg.name}</b> was decommissioned by the provider.\n\n"
+                f"Choose another model 👇",
                 parse_mode="HTML",
                 reply_markup=models_keyboard(model_key),
             )
         elif "too large" in error_str.lower() or "entity too large" in error_str.lower() or "context" in error_str.lower():
             await reply.edit_text(
-                f"📝 <b>Контекст диалога слишком большой</b>\n\n"
-                f"Начни новый чат командой /newchat или кнопкой <b>💬 Новый чат</b> — "
-                f"это очистит историю и позволит продолжить.",
+                f"📝 <b>Conversation context is too large</b>\n\n"
+                f"Start a new chat with /newchat or tap <b>💬 New Chat</b> — "
+                f"this will clear the history so you can continue.",
                 parse_mode="HTML",
             )
         else:
             await reply.edit_text(
-                f"⚠️ <b>Ошибка модели</b>\n\n"
-                f"Попробуй ещё раз или выбери другую модель 👇",
+                f"⚠️ <b>Model error</b>\n\n"
+                f"Try again or choose a different model 👇",
                 parse_mode="HTML",
                 reply_markup=models_keyboard(model_key),
             )

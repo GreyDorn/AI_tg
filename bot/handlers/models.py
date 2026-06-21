@@ -11,15 +11,14 @@ router = Router()
 
 
 async def _show_models(target: Message | CallbackQuery, db_user: User, db_session: AsyncSession) -> None:
-    # Если модель пользователя была удалена — переключаем на дефолтную
     if db_user.current_model not in MODELS:
         db_user.current_model = DEFAULT_MODEL
         await update_user_model(db_session, db_user.id, DEFAULT_MODEL)
 
     text = (
-        f"🤖 <b>Выбор модели</b>\n\n"
-        f"Текущая: <b>{MODELS[db_user.current_model].name}</b>\n\n"
-        f"Стоимость указана в 🔥 кредитах за сообщение."
+        f"🤖 <b>Choose a Model</b>\n\n"
+        f"Current: <b>{MODELS[db_user.current_model].name}</b>\n\n"
+        f"1 request per message for all models."
     )
     markup = models_keyboard(db_user.current_model)
 
@@ -30,7 +29,7 @@ async def _show_models(target: Message | CallbackQuery, db_user: User, db_sessio
 
 
 @router.message(Command("models"))
-@router.message(F.text == "🤖 Модели")
+@router.message(F.text == "🤖 Models")
 async def cmd_models(message: Message, db_session: AsyncSession, db_user: User) -> None:
     await _show_models(message, db_user, db_session)
 
@@ -40,24 +39,22 @@ async def select_model(callback: CallbackQuery, db_session: AsyncSession, db_use
     model_key = callback.data.split(":", 1)[1]
 
     if model_key not in MODELS:
-        await callback.answer("Неизвестная модель.", show_alert=True)
+        await callback.answer("Unknown model.", show_alert=True)
         return
 
     if model_key == db_user.current_model:
         try:
-            await callback.answer("Эта модель уже выбрана ✅")
+            await callback.answer("This model is already selected ✅")
         except Exception:
             pass
         return
 
     await update_user_model(db_session, db_user.id, model_key)
     db_user.current_model = model_key
-
-    # Начинаем новый диалог с новой моделью
     await create_conversation(db_session, db_user.id, model_key)
 
     try:
-        await callback.answer(f"✅ Модель изменена на {MODELS[model_key].name}")
+        await callback.answer(f"✅ Switched to {MODELS[model_key].name}")
     except Exception:
-        pass  # Callback мог устареть при перезапуске бота
+        pass
     await _show_models(callback, db_user, db_session)
