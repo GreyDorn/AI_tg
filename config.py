@@ -99,7 +99,7 @@ REFERRAL_BONUS_CREDITS = 3      # за каждого реферала
 
 # Контекст диалога
 MAX_CONTEXT_MESSAGES = 20       # макс. сообщений в контексте
-MAX_CONTEXT_CHARS = 8000        # макс. символов в контексте
+MAX_CONTEXT_CHARS = 4000        # макс. символов в контексте
 
 # Конфиг из .env
 BOT_TOKEN: str = os.getenv("BOT_TOKEN", "")

@@ -19,7 +19,7 @@ class GroqLLM(BaseLLM):
             model=model_id,
             messages=history,
             stream=True,
-            max_tokens=8192,
+            max_tokens=4096,
         )
 
         in_think = False
