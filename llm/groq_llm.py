@@ -19,16 +19,23 @@ class GroqLLM(BaseLLM):
             model=model_id,
             messages=history,
             stream=True,
-            max_tokens=2048,
+            max_tokens=8192,
         )
 
         in_think = False
+        finish_reason = None
         async for chunk in stream:
-            delta = chunk.choices[0].delta.content
+            choice = chunk.choices[0]
+            if choice.finish_reason:
+                finish_reason = choice.finish_reason
+            delta = choice.delta.content
             if delta:
                 clean, in_think = self._filter_thinking(delta, in_think)
                 if clean:
                     yield clean
+
+        if finish_reason == "length":
+            yield "\n\n⚠️ _Ответ обрезан — достигнут лимит токенов. Попроси продолжить._"
 
     @staticmethod
     def _filter_thinking(text: str, in_think: bool) -> tuple[str, bool]:
