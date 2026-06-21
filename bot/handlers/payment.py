@@ -34,11 +34,11 @@ async def cmd_buy(message: Message, db_user: User) -> None:
 
 @router.callback_query(F.data == "subscribe")
 async def process_subscribe_callback(callback: CallbackQuery) -> None:
-    await callback.message.answer_invoice(
+    await callback.bot.send_invoice(
+        chat_id=callback.from_user.id,
         title="Безлимитная подписка на 30 дней",
         description=f"Неограниченные запросы ко всем AI-моделям на {SUBSCRIPTION_DAYS} дней",
         payload=f"subscription:{callback.from_user.id}",
-        provider_token="",
         currency="XTR",
         prices=[LabeledPrice(label=f"Подписка {SUBSCRIPTION_DAYS} дней", amount=SUBSCRIPTION_PRICE_STARS)],
     )
