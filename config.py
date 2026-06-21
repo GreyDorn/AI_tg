@@ -46,6 +46,14 @@ MODELS: Dict[str, LLMModel] = {
         cost_per_message=1,
         disable_thinking=True,
     ),
+    "qwen3-27b": LLMModel(
+        id="qwen/qwen3.6-27b",
+        name="Qwen3.6 27B",
+        provider="groq",
+        description="Новая модель Alibaba (быстрее и умнее)",
+        cost_per_message=1,
+        disable_thinking=True,
+    ),
     "llama-4-scout": LLMModel(
         id="meta-llama/llama-4-scout-17b-16e-instruct",
         name="Llama 4 Scout",
@@ -53,18 +61,18 @@ MODELS: Dict[str, LLMModel] = {
         description="Новейшая модель Meta Llama 4",
         cost_per_message=1,
     ),
-    "gpt-oss-120b": LLMModel(
-        id="openai/gpt-oss-120b",
-        name="GPT OSS 120B",
+    "compound": LLMModel(
+        id="groq/compound",
+        name="Groq Compound",
         provider="groq",
-        description="Открытая модель OpenAI 120B параметров",
+        description="Флагманская модель от Groq",
         cost_per_message=1,
     ),
-    "gpt-oss-20b": LLMModel(
-        id="openai/gpt-oss-20b",
-        name="GPT OSS 20B",
+    "compound-mini": LLMModel(
+        id="groq/compound-mini",
+        name="Groq Compound Mini",
         provider="groq",
-        description="Лёгкая открытая модель OpenAI (сверхбыстро)",
+        description="Быстрая модель Groq",
         cost_per_message=1,
     ),
 }
