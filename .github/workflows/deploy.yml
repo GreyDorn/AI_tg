@@ -1,0 +1,20 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            export APP_DIR="${{ secrets.DEPLOY_APP_DIR || '/opt/AI_tg' }}"
+            export SERVICE_NAME="${{ secrets.DEPLOY_SERVICE_NAME || 'ai-tg-bot' }}"
+            bash "$APP_DIR/scripts/deploy.sh"
