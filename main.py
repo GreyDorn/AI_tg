@@ -50,7 +50,11 @@ async def main() -> None:
     dp.include_router(chat.router)
 
     logger.info("Бот запущен")
-    await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+    allowed_updates = dp.resolve_used_update_types()
+    for required_update in ("pre_checkout_query", "message", "callback_query"):
+        if required_update not in allowed_updates:
+            allowed_updates.append(required_update)
+    await dp.start_polling(bot, allowed_updates=allowed_updates)
 
 
 if __name__ == "__main__":
