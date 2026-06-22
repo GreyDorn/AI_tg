@@ -96,6 +96,11 @@ DEFAULT_MODEL = "llama-3.3-70b"
 # Subscription
 SUBSCRIPTION_PRICE_STARS = 299   # price in Telegram Stars
 SUBSCRIPTION_DAYS = 30           # duration in days
+PREMIUM_BOT_USERNAME = "PremiumBot"
+# Opens PremiumBot stars purchase UI inline (no chat switch).
+PREMIUM_BOT_STARS_URL = f"https://t.me/{PREMIUM_BOT_USERNAME}?start=stars"
+# Opens native stars top-up sheet with required balance hint.
+STARS_TOPUP_URL = f"tg://stars_topup?balance={SUBSCRIPTION_PRICE_STARS}"
 
 # Flood protection
 RATE_LIMIT_MESSAGES = 5     # max messages

@@ -7,7 +7,7 @@ from aiogram.types import (
 )
 from aiogram.exceptions import TelegramAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
-from config import SUBSCRIPTION_PRICE_STARS, SUBSCRIPTION_DAYS
+from config import SUBSCRIPTION_PRICE_STARS, SUBSCRIPTION_DAYS, PREMIUM_BOT_STARS_URL
 from db.models import User
 from db.repository import activate_subscription
 from bot.keyboards.main import subscription_keyboard
@@ -44,9 +44,9 @@ async def cmd_buy(message: Message, db_user: User) -> None:
         f"• All models, no restrictions\n"
         f"• {SUBSCRIPTION_DAYS} days of access{sub_status}\n\n"
         f"Price: <b>{SUBSCRIPTION_PRICE_STARS} ⭐ Stars / month</b>\n\n"
-        f"ℹ️ You need at least <b>{SUBSCRIPTION_PRICE_STARS} ⭐</b> on your balance. "
-        f"If you have 0 stars, buy them first via @PremiumBot "
-        f"(Telegram → Settings → My Stars).",
+        f"ℹ️ Need stars? Tap <b>Buy Stars</b> below — the purchase window "
+        f"opens right here (via PremiumBot), without leaving the chat.\n"
+        f"Then tap <b>Subscribe</b> to activate unlimited access.",
         reply_markup=subscription_keyboard(),
     )
 
@@ -83,7 +83,7 @@ async def process_subscribe_callback(callback: CallbackQuery) -> None:
             "If the error persists:\n"
             "1. Make sure you have enough ⭐ on your balance "
             f"(need {SUBSCRIPTION_PRICE_STARS} ⭐)\n"
-            "2. Buy stars via @PremiumBot if needed\n"
+            "2. Tap <b>Buy Stars</b> in /buy to top up via PremiumBot\n"
             "3. Write to /paysupport\n\n"
             f"<i>Technical details: {exc.message}</i>",
         )
@@ -143,11 +143,11 @@ async def cmd_paysupport(message: Message) -> None:
         "💬 <b>Payment Support</b>\n\n"
         "If you have issues paying with Telegram Stars:\n\n"
         f"1. You need at least <b>{SUBSCRIPTION_PRICE_STARS} ⭐</b> on your balance\n"
-        "2. Buy stars via @PremiumBot or Telegram → Settings → My Stars\n"
-        "3. If you see <code>PROVIDER_ACCOUNT_INVALID</code>, "
-        "try another payment method for buying stars "
-        "(another card, desktop Telegram, or @PremiumBot)\n"
-        "4. After payment, your subscription activates automatically\n\n"
+        "2. Open /buy and tap <b>Buy Stars</b> — PremiumBot opens inline\n"
+        f"3. Alternative link: {PREMIUM_BOT_STARS_URL}\n"
+        "4. If you see <code>PROVIDER_ACCOUNT_INVALID</code>, "
+        "try another card or Telegram Desktop\n"
+        "5. After buying stars, tap <b>Subscribe</b> in /buy\n\n"
         "If the problem persists, describe the error and send a screenshot here. "
         "We will help manually.",
     )

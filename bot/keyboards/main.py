@@ -1,6 +1,6 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from config import MODELS, DEFAULT_MODEL, SUBSCRIPTION_PRICE_STARS
+from config import MODELS, DEFAULT_MODEL, SUBSCRIPTION_PRICE_STARS, STARS_TOPUP_URL
 
 
 def main_menu() -> ReplyKeyboardMarkup:
@@ -44,6 +44,10 @@ def referral_keyboard(bot_username: str, user_id: int) -> InlineKeyboardMarkup:
 def subscription_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
+            [InlineKeyboardButton(
+                text=f"Buy Stars — from {SUBSCRIPTION_PRICE_STARS} ⭐",
+                url=STARS_TOPUP_URL,
+            )],
             [InlineKeyboardButton(
                 text=f"Subscribe — {SUBSCRIPTION_PRICE_STARS} ⭐",
                 callback_data="subscribe",
