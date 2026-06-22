@@ -1,4 +1,5 @@
 import asyncio
+import html
 import logging
 from aiogram import Router, F
 from aiogram.types import Message
@@ -14,6 +15,7 @@ from db.repository import (
 )
 from llm import get_llm
 from bot.keyboards.main import models_keyboard
+from bot.utils.formatting import format_model_text
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -34,6 +36,20 @@ def _split_text(text: str, limit: int = TG_MAX_LENGTH) -> list[str]:
     if text:
         parts.append(text)
     return parts
+
+
+async def _send_formatted(reply: Message, text: str) -> None:
+    try:
+        await reply.edit_text(format_model_text(text))
+    except Exception:
+        await reply.edit_text(html.escape(text))
+
+
+async def _answer_formatted(message: Message, text: str) -> None:
+    try:
+        await message.answer(format_model_text(text))
+    except Exception:
+        await message.answer(html.escape(text))
 
 
 @router.message(F.text & ~F.text.startswith("/") & ~F.text.in_({"💬 New Chat", "🤖 Models", "💰 Balance", "👥 Referral", "💎 Subscription"}))
@@ -77,7 +93,7 @@ async def handle_message(message: Message, db_session: AsyncSession, db_user: Us
                 # show preview during streaming (last TG_MAX_LENGTH chars)
                 preview = full_response[-TG_MAX_LENGTH + 3:] if len(full_response) > TG_MAX_LENGTH else full_response
                 try:
-                    await reply.edit_text(preview + " ▌")
+                    await reply.edit_text(html.escape(preview) + " ▌")
                     last_edit_time = now
                 except Exception:
                     pass
@@ -87,9 +103,9 @@ async def handle_message(message: Message, db_session: AsyncSession, db_user: Us
             return
 
         parts = _split_text(full_response)
-        await reply.edit_text(parts[0])
+        await _send_formatted(reply, parts[0])
         for part in parts[1:]:
-            await message.answer(part)
+            await _answer_formatted(message, part)
 
     except Exception as e:
         error_str = str(e)
