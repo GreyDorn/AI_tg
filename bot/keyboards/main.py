@@ -47,6 +47,10 @@ def subscription_keyboard() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(
                 text=f"Subscribe — {SUBSCRIPTION_PRICE_STARS} ⭐",
                 callback_data="subscribe",
-            )]
+            )],
+            [InlineKeyboardButton(
+                text="Buy ⭐ Stars",
+                url="https://t.me/PremiumBot",
+            )],
         ]
     )
