@@ -27,8 +27,7 @@ async def cmd_buy(message: Message, db_user: User) -> None:
         f"• Unlimited requests to all models\n"
         f"• All models, no restrictions\n"
         f"• {SUBSCRIPTION_DAYS} days of access{sub_status}\n\n"
-        f"Price: <b>{SUBSCRIPTION_PRICE_STARS} ⭐ Stars / month</b>\n\n"
-        f"<i>Don't have Stars? Buy them via @PremiumBot using a bank card.</i>",
+        f"Price: <b>{SUBSCRIPTION_PRICE_STARS} ⭐ Stars / month</b>",
         reply_markup=subscription_keyboard(),
     )
 
