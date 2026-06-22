@@ -24,7 +24,7 @@ class OpenRouterLLM(BaseLLM):
             "model": model_id,
             "messages": history,
             "stream": True,
-            "max_tokens": 2048,
+            "max_tokens": 4096,
         }
 
         async with aiohttp.ClientSession() as session:

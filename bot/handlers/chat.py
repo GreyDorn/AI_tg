@@ -95,10 +95,18 @@ async def handle_message(message: Message, db_session: AsyncSession, db_user: Us
         error_str = str(e)
         logger.error("LLM error for user %s model %s: %s", db_user.id, model_key, error_str)
 
-        if "429" in error_str or "quota" in error_str.lower() or "rate" in error_str.lower():
+        if "429" in error_str or "quota" in error_str.lower() or "rate" in error_str.lower() or "resource_exhausted" in error_str.lower():
             await reply.edit_text(
                 f"⏳ <b>Model is overloaded</b>\n\n"
                 f"<b>{model_cfg.name}</b> has reached its request limit.\n\n"
+                f"Choose another model 👇",
+                parse_mode="HTML",
+                reply_markup=models_keyboard(model_key),
+            )
+        elif "402" in error_str or "insufficient balance" in error_str.lower() or "payment required" in error_str.lower():
+            await reply.edit_text(
+                f"💳 <b>Model temporarily unavailable</b>\n\n"
+                f"<b>{model_cfg.name}</b> is not available right now due to provider limits.\n\n"
                 f"Choose another model 👇",
                 parse_mode="HTML",
                 reply_markup=models_keyboard(model_key),

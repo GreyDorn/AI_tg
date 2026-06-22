@@ -18,8 +18,8 @@ class LLMModel:
 
 MODELS: Dict[str, LLMModel] = {
     "gemini-2.0-flash": LLMModel(
-        id="gemini-2.0-flash",
-        name="Gemini 2.0 Flash",
+        id="gemini-2.5-flash-lite",
+        name="Gemini 2.5 Flash",
         provider="google",
         description="Fast & smart model by Google",
         cost_per_message=1,
@@ -76,16 +76,16 @@ MODELS: Dict[str, LLMModel] = {
         cost_per_message=1,
     ),
     "deepseek-v3": LLMModel(
-        id="deepseek-chat",
+        id="deepseek/deepseek-chat",
         name="DeepSeek V3",
-        provider="deepseek",
+        provider="openrouter",
         description="DeepSeek's powerful general-purpose model",
         cost_per_message=1,
     ),
     "deepseek-r1": LLMModel(
-        id="deepseek-reasoner",
+        id="deepseek/deepseek-r1",
         name="DeepSeek R1",
-        provider="deepseek",
+        provider="openrouter",
         description="DeepSeek's advanced reasoning model",
         cost_per_message=1,
     ),
