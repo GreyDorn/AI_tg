@@ -95,6 +95,8 @@ DEFAULT_MODEL = "llama-3.3-70b"
 
 # Image generation (via OpenRouter + Gemini Image model)
 IMAGE_MODEL_ID = "google/gemini-2.5-flash-image"
+IMAGE_FALLBACK_MODEL_ID = "black-forest-labs/flux.2-klein-4b"
+IMAGE_MAX_TOKENS = 1024
 IMAGE_COST_CREDITS = 3
 
 # Subscription
