@@ -93,6 +93,10 @@ MODELS: Dict[str, LLMModel] = {
 
 DEFAULT_MODEL = "llama-3.3-70b"
 
+# Image generation (via OpenRouter + Gemini Image model)
+IMAGE_MODEL_ID = "google/gemini-2.5-flash-image"
+IMAGE_COST_CREDITS = 3
+
 # Subscription
 SUBSCRIPTION_PRICE_STARS = 299   # price in Telegram Stars
 SUBSCRIPTION_DAYS = 30           # duration in days

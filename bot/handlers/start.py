@@ -2,7 +2,7 @@ from aiogram import Router
 from aiogram.filters import CommandStart, Command
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
-from config import FREE_CREDITS_ON_START, DAILY_FREE_CREDITS, REFERRAL_BONUS_CREDITS, SUBSCRIPTION_PRICE_STARS, MODELS
+from config import FREE_CREDITS_ON_START, DAILY_FREE_CREDITS, REFERRAL_BONUS_CREDITS, SUBSCRIPTION_PRICE_STARS, IMAGE_COST_CREDITS, MODELS
 from db.models import User
 from db.repository import create_conversation
 from bot.keyboards.main import main_menu
@@ -21,7 +21,8 @@ async def cmd_start(message: Message, db_session: AsyncSession, db_user: User) -
         f"• Answer questions\n"
         f"• Write code and content\n"
         f"• Analyze and explain\n"
-        f"• Translate and edit\n\n"
+        f"• Translate and edit\n"
+        f"• Create images with /image\n\n"
         f"Just send me a message 👇",
         parse_mode="HTML",
         reply_markup=main_menu(),
@@ -41,6 +42,7 @@ async def cmd_help(message: Message) -> None:
         f"/start — main menu\n"
         f"/newchat — start a new conversation\n"
         f"/models — choose a model\n"
+        f"/image — create an image (AI)\n"
         f"/balance — your request balance\n"
         f"/buy — unlimited subscription\n"
         f"/referral — referral program\n"
@@ -50,6 +52,7 @@ async def cmd_help(message: Message) -> None:
         f"• {FREE_CREDITS_ON_START} requests on registration\n"
         f"• +{DAILY_FREE_CREDITS} every day\n"
         f"• +{REFERRAL_BONUS_CREDITS} for each referred friend\n\n"
+        f"🎨 <b>Image generation</b> — /image (costs {IMAGE_COST_CREDITS} requests)\n"
         f"💎 <b>Unlimited subscription</b> — {SUBSCRIPTION_PRICE_STARS} ⭐/month",
         parse_mode="HTML",
     )

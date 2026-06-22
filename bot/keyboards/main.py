@@ -7,8 +7,8 @@ def main_menu() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="💬 New Chat"), KeyboardButton(text="🤖 Models")],
-            [KeyboardButton(text="💰 Balance"), KeyboardButton(text="👥 Referral")],
-            [KeyboardButton(text="💎 Subscription")],
+            [KeyboardButton(text="🎨 Create Image"), KeyboardButton(text="💰 Balance")],
+            [KeyboardButton(text="👥 Referral"), KeyboardButton(text="💎 Subscription")],
         ],
         resize_keyboard=True,
     )
