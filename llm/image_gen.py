@@ -4,6 +4,7 @@ import urllib.parse
 import aiohttp
 from config import (
     OPENROUTER_API_KEY,
+    POLLINATIONS_API_KEY,
     IMAGE_MODELS,
     IMAGE_MAX_TOKENS,
     IMAGE_WIDTH,
@@ -16,8 +17,14 @@ from llm.provider_status import set_openrouter_paid_available
 logger = logging.getLogger(__name__)
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-POLLINATIONS_URL = "https://image.pollinations.ai/prompt/{prompt}"
+POLLINATIONS_GEN_URL = "https://gen.pollinations.ai/image/{prompt}"
+POLLINATIONS_LEGACY_URL = "https://image.pollinations.ai/prompt/{prompt}"
 POLLINATIONS_FALLBACK_MODEL = "flux"
+
+# Старый id turbo больше не принимается gen.pollinations.ai (возвращает JSON-ошибку).
+_MODEL_ALIASES = {
+    "turbo": "zimage",
+}
 
 _IMAGE_SIGNATURES = (
     b"\xff\xd8\xff",  # JPEG
@@ -28,6 +35,10 @@ _IMAGE_SIGNATURES = (
 
 class ImageGenerationError(Exception):
     pass
+
+
+def _resolve_pollinations_model(model_id: str) -> str:
+    return _MODEL_ALIASES.get(model_id, model_id)
 
 
 def _modalities_for_model(model_id: str) -> list[str]:
@@ -45,8 +56,22 @@ def _is_image_bytes(data: bytes) -> bool:
     return data.startswith(b"RIFF") and data[8:12] == b"WEBP"
 
 
+def _validate_image_response(data: bytes, content_type: str) -> None:
+    if len(data) < 1000:
+        raise ImageGenerationError("API returned empty image")
+    if not _is_image_bytes(data):
+        snippet = data[:200].decode("utf-8", errors="replace")
+        raise ImageGenerationError(f"API returned text instead of image: {snippet[:120]}")
+
+
 def _build_image_prompt(prompt: str) -> str:
     return prompt.strip()
+
+
+def _pollinations_headers() -> dict[str, str]:
+    if POLLINATIONS_API_KEY:
+        return {"Authorization": f"Bearer {POLLINATIONS_API_KEY}"}
+    return {}
 
 
 def _extract_images_from_message(message: dict) -> list[dict]:
@@ -136,29 +161,74 @@ async def _generate_openrouter(model_id: str, prompt: str) -> tuple[bytes, str]:
     return image_bytes, mime_type
 
 
-async def _generate_pollinations(model_id: str, prompt: str) -> tuple[bytes, str]:
+async def _fetch_pollinations_image(url: str, headers: dict[str, str]) -> tuple[bytes, str]:
+    async with aiohttp.ClientSession() as session:
+        async with session.get(
+            url,
+            headers=headers,
+            timeout=aiohttp.ClientTimeout(total=120),
+        ) as resp:
+            if resp.status != 200:
+                error = await resp.text()
+                raise ImageGenerationError(f"API error {resp.status}: {error[:300]}")
+            content_type = resp.headers.get("Content-Type", "image/jpeg")
+            data = await resp.read()
+    _validate_image_response(data, content_type)
+    return data, content_type.split(";")[0]
+
+
+async def _generate_pollinations_gen(model_id: str, prompt: str) -> tuple[bytes, str]:
     params = urllib.parse.urlencode(
         {
             "model": model_id,
             "width": IMAGE_WIDTH,
             "height": IMAGE_HEIGHT,
-            "enhance": "true",
             "nologo": "true",
         }
     )
-    url = f"{POLLINATIONS_URL.format(prompt=urllib.parse.quote(prompt))}?{params}"
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url, timeout=aiohttp.ClientTimeout(total=120)) as resp:
-            if resp.status != 200:
-                raise ImageGenerationError(f"API error {resp.status}")
-            content_type = resp.headers.get("Content-Type", "image/jpeg")
-            data = await resp.read()
-            if len(data) < 1000:
-                raise ImageGenerationError("API returned empty image")
-            if not _is_image_bytes(data):
-                snippet = data[:200].decode("utf-8", errors="replace")
-                raise ImageGenerationError(f"API returned text instead of image: {snippet[:120]}")
-            return data, content_type.split(";")[0]
+    url = f"{POLLINATIONS_GEN_URL.format(prompt=urllib.parse.quote(prompt))}?{params}"
+    return await _fetch_pollinations_image(url, _pollinations_headers())
+
+
+async def _generate_pollinations_legacy(model_id: str, prompt: str) -> tuple[bytes, str]:
+    params = urllib.parse.urlencode(
+        {
+            "model": model_id,
+            "width": IMAGE_WIDTH,
+            "height": IMAGE_HEIGHT,
+            "nologo": "true",
+        }
+    )
+    url = f"{POLLINATIONS_LEGACY_URL.format(prompt=urllib.parse.quote(prompt))}?{params}"
+    return await _fetch_pollinations_image(url, {})
+
+
+async def _generate_pollinations(model_id: str, prompt: str) -> tuple[bytes, str]:
+    model_id = _resolve_pollinations_model(model_id)
+    errors: list[str] = []
+
+    for attempt_name, generator in (
+        ("gen", _generate_pollinations_gen),
+        ("legacy", _generate_pollinations_legacy),
+    ):
+        try:
+            result = await generator(model_id, prompt)
+            logger.info("Image generated via Pollinations %s model=%s", attempt_name, model_id)
+            return result
+        except ImageGenerationError as exc:
+            errors.append(f"{attempt_name}: {exc}")
+            logger.warning("Pollinations %s failed model=%s: %s", attempt_name, model_id, exc)
+
+    if model_id != POLLINATIONS_FALLBACK_MODEL:
+        logger.warning(
+            "Pollinations model=%s failed (%s), falling back to %s",
+            model_id,
+            "; ".join(errors),
+            POLLINATIONS_FALLBACK_MODEL,
+        )
+        return await _generate_pollinations(POLLINATIONS_FALLBACK_MODEL, prompt)
+
+    raise ImageGenerationError("; ".join(errors))
 
 
 async def generate_image(prompt: str, model_key: str) -> tuple[bytes, str]:
@@ -185,8 +255,6 @@ async def generate_image(prompt: str, model_key: str) -> tuple[bytes, str]:
             return result
 
     if model.provider == "pollinations":
-        result = await _generate_pollinations(model.id, prompt)
-        logger.info("Image generated via Pollinations model=%s", model.id)
-        return result
+        return await _generate_pollinations(model.id, prompt)
 
     raise ImageGenerationError(f"Unsupported image provider: {model.provider}")

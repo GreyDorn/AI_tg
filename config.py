@@ -144,10 +144,10 @@ IMAGE_MODELS: Dict[str, ImageModel] = {
         cost_per_image=0,
     ),
     "turbo-free": ImageModel(
-        id="turbo",
+        id="zimage",
         name="Turbo (Free)",
         provider="pollinations",
-        description="Free and very fast",
+        description="Fast generation (Z-Image Turbo)",
         cost_per_image=0,
     ),
 }
