@@ -6,7 +6,7 @@ from config import MUSIC_MODELS
 from db.models import User
 from db.repository import update_user_music_model
 from bot.keyboards.main import music_models_keyboard
-from llm.music_gen import is_pollinations_music_configured
+from llm.music_gen import is_pollinations_music_configured, is_music_feature_enabled
 from llm.provider_status import get_available_music_models, resolve_music_model_key
 
 router = Router()
@@ -58,6 +58,12 @@ async def _show_music_models(target: Message | CallbackQuery, db_user: User, db_
 @router.message(Command("musicmodels"))
 @router.message(F.text == "🎵 Music Models")
 async def cmd_music_models(message: Message, db_session: AsyncSession, db_user: User) -> None:
+    if not is_music_feature_enabled():
+        await message.answer(
+            "🎵 <b>Music generation is temporarily unavailable</b>",
+            parse_mode="HTML",
+        )
+        return
     await _show_music_models(message, db_user, db_session)
 
 

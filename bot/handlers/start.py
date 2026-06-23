@@ -3,6 +3,7 @@ from aiogram.filters import CommandStart, Command
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 from config import FREE_CREDITS_ON_START, DAILY_FREE_CREDITS, REFERRAL_BONUS_CREDITS, SUBSCRIPTION_PRICE_STARS, IMAGE_MODELS, MUSIC_MODELS, MODELS
+from llm.music_gen import is_music_feature_enabled
 from db.models import User
 from db.repository import create_conversation
 from bot.keyboards.main import main_menu
@@ -12,18 +13,22 @@ router = Router()
 
 @router.message(CommandStart())
 async def cmd_start(message: Message, db_session: AsyncSession, db_user: User) -> None:
+    features = (
+        "• Answer questions\n"
+        "• Write code and content\n"
+        "• Analyze and explain\n"
+        "• Translate and edit\n"
+        "• Create images with /image\n"
+    )
+    if is_music_feature_enabled():
+        features += "• Create music with /music\n"
     await message.answer(
         f"👋 <b>Hey, {message.from_user.first_name}!</b>\n\n"
         f"I'm an AI assistant with multiple language models.\n\n"
         f"🎁 <b>You get {FREE_CREDITS_ON_START} free requests</b> to get started!\n"
         f"Every day — another <b>+{DAILY_FREE_CREDITS} free requests</b>.\n\n"
         f"<b>What I can do:</b>\n"
-        f"• Answer questions\n"
-        f"• Write code and content\n"
-        f"• Analyze and explain\n"
-        f"• Translate and edit\n"
-        f"• Create images with /image\n"
-        f"• Create music with /music\n\n"
+        f"{features}\n"
         f"Just send me a message 👇",
         parse_mode="HTML",
         reply_markup=main_menu(),
@@ -42,12 +47,21 @@ async def cmd_help(message: Message) -> None:
         + (f" ({m.cost_per_image} req)" if m.cost_per_image else " (free)")
         for m in IMAGE_MODELS.values()
     )
-    music_models_text = "\n".join(
-        f"• <b>{m.name}</b> — {m.description}"
-        + (f" ({m.cost_per_track} req)" if m.cost_per_track else " (free)")
-        + f", ~{m.duration_seconds}s"
-        for m in MUSIC_MODELS.values()
-    )
+    music_models_text = ""
+    music_commands = ""
+    music_section = ""
+    if is_music_feature_enabled():
+        music_models_text = "\n".join(
+            f"• <b>{m.name}</b> — {m.description}"
+            + (f" ({m.cost_per_track} req)" if m.cost_per_track else " (free)")
+            + f", ~{m.duration_seconds}s"
+            for m in MUSIC_MODELS.values()
+        )
+        music_commands = (
+            "/music — create music\n"
+            "/musicmodels — choose music model\n"
+        )
+        music_section = f"<b>Music models:</b>\n{music_models_text}\n\n"
     await message.answer(
         f"<b>📚 Help</b>\n\n"
         f"<b>Commands:</b>\n"
@@ -56,15 +70,14 @@ async def cmd_help(message: Message) -> None:
         f"/models — choose a text model\n"
         f"/image — create an image\n"
         f"/imagemodels — choose image model\n"
-        f"/music — create music\n"
-        f"/musicmodels — choose music model\n"
+        f"{music_commands}"
         f"/balance — your request balance\n"
         f"/buy — unlimited subscription\n"
         f"/referral — referral program\n"
         f"/help — this help message\n\n"
         f"<b>Text models:</b>\n{models_text}\n\n"
         f"<b>Image models:</b>\n{image_models_text}\n\n"
-        f"<b>Music models:</b>\n{music_models_text}\n\n"
+        f"{music_section}"
         f"<b>Free requests:</b>\n"
         f"• {FREE_CREDITS_ON_START} requests on registration\n"
         f"• +{DAILY_FREE_CREDITS} every day\n"

@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import MUSIC_MODELS
 from db.models import User
 from db.repository import spend_credits, update_user_music_model, set_waiting_for_music
-from llm.music_gen import generate_music, MusicGenerationError, is_pollinations_music_configured
+from llm.music_gen import generate_music, MusicGenerationError, is_pollinations_music_configured, is_music_feature_enabled
 from llm.provider_status import resolve_music_model_key
 from bot.keyboards.main import music_models_keyboard, cancel_music_keyboard
 
@@ -46,6 +46,14 @@ async def _set_waiting(
         return
     await set_waiting_for_music(db_session, db_user.id, waiting)
     db_user.waiting_for_music = waiting
+
+
+async def _music_disabled_message(message: Message) -> None:
+    await message.answer(
+        "🎵 <b>Music generation is temporarily unavailable</b>\n\n"
+        "This feature will return when a free music API is available.",
+        parse_mode="HTML",
+    )
 
 
 async def _music_unavailable_message(message: Message) -> None:
@@ -193,6 +201,9 @@ async def cmd_music(
     db_session: AsyncSession,
     db_user: User,
 ) -> None:
+    if not is_music_feature_enabled():
+        await _music_disabled_message(message)
+        return
     if not is_pollinations_music_configured():
         await _music_unavailable_message(message)
         return
@@ -212,6 +223,9 @@ async def btn_music(
     db_session: AsyncSession,
     db_user: User,
 ) -> None:
+    if not is_music_feature_enabled():
+        await _music_disabled_message(message)
+        return
     if not is_pollinations_music_configured():
         await _music_unavailable_message(message)
         return

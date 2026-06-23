@@ -189,6 +189,9 @@ MUSIC_MODELS: Dict[str, MusicModel] = {
 
 DEFAULT_MUSIC_MODEL = "elevenmusic-free"
 
+# False: music via Pollinations requires paid pollen (no free API yet)
+MUSIC_FEATURE_ENABLED = False
+
 # Subscription
 SUBSCRIPTION_PRICE_STARS = 299   # price in Telegram Stars
 SUBSCRIPTION_DAYS = 30           # duration in days

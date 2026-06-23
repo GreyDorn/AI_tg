@@ -26,6 +26,11 @@ def is_pollinations_music_configured() -> bool:
     return bool(POLLINATIONS_API_KEY)
 
 
+def is_music_feature_enabled() -> bool:
+    from config import MUSIC_FEATURE_ENABLED
+    return MUSIC_FEATURE_ENABLED
+
+
 def _is_audio_bytes(data: bytes) -> bool:
     if len(data) < 12:
         return False

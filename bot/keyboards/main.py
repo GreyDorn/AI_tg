@@ -2,19 +2,23 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeybo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from config import MODELS, DEFAULT_MODEL, SUBSCRIPTION_PRICE_STARS, STARS_TOPUP_URL
 from llm.provider_status import get_available_image_models, get_available_music_models
+from llm.music_gen import is_music_feature_enabled
 
 
 def main_menu() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="💬 New Chat"), KeyboardButton(text="🤖 Models")],
-            [KeyboardButton(text="🎨 Create Image"), KeyboardButton(text="🖼 Image Models")],
-            [KeyboardButton(text="🎵 Create Music"), KeyboardButton(text="🎵 Music Models")],
-            [KeyboardButton(text="💰 Balance"), KeyboardButton(text="👥 Referral")],
-            [KeyboardButton(text="💎 Subscription")],
-        ],
-        resize_keyboard=True,
-    )
+    keyboard = [
+        [KeyboardButton(text="💬 New Chat"), KeyboardButton(text="🤖 Models")],
+        [KeyboardButton(text="🎨 Create Image"), KeyboardButton(text="🖼 Image Models")],
+    ]
+    if is_music_feature_enabled():
+        keyboard.append(
+            [KeyboardButton(text="🎵 Create Music"), KeyboardButton(text="🎵 Music Models")]
+        )
+    keyboard.extend([
+        [KeyboardButton(text="💰 Balance"), KeyboardButton(text="👥 Referral")],
+        [KeyboardButton(text="💎 Subscription")],
+    ])
+    return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
 
 
 def models_keyboard(current_model: str) -> InlineKeyboardMarkup:
