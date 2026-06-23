@@ -69,7 +69,9 @@ async def cmd_help(message: Message) -> None:
 async def cmd_newchat(message: Message, db_session: AsyncSession, db_user: User) -> None:
     await create_conversation(db_session, db_user.id, db_user.current_model)
     await message.answer(
-        f"✅ New conversation started!\n"
-        f"Model: <b>{MODELS[db_user.current_model].name}</b>",
+        f"✅ <b>New conversation started!</b>\n\n"
+        f"Previous chat history was cleared.\n"
+        f"Model: <b>{MODELS[db_user.current_model].name}</b>\n\n"
+        f"Tip: use /start to see the welcome message again.",
         parse_mode="HTML",
     )

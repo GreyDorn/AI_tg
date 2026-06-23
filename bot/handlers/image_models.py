@@ -10,21 +10,24 @@ from bot.keyboards.main import image_models_keyboard
 router = Router()
 
 
+def _format_cost(cost: int) -> str:
+    if cost == 0:
+        return "free"
+    if cost == 1:
+        return "1 request"
+    return f"{cost} requests"
+
+
 async def _show_image_models(target: Message | CallbackQuery, db_user: User, db_session: AsyncSession) -> None:
     if db_user.current_image_model not in IMAGE_MODELS:
         db_user.current_image_model = DEFAULT_IMAGE_MODEL
         await update_user_image_model(db_session, db_user.id, DEFAULT_IMAGE_MODEL)
 
     current = IMAGE_MODELS[db_user.current_image_model]
-    cost = (
-        "бесплатно"
-        if current.cost_per_image == 0
-        else f"{current.cost_per_image} запроса"
-    )
     text = (
-        f"🖼 <b>Модели для картинок</b>\n\n"
-        f"Текущая: <b>{current.name}</b> ({cost})\n\n"
-        f"Выберите модель, затем отправьте /image или нажмите 🎨 Create Image."
+        f"🖼 <b>Image Models</b>\n\n"
+        f"Current: <b>{current.name}</b> ({_format_cost(current.cost_per_image)})\n\n"
+        f"Pick a model, then send /image or tap 🎨 Create Image."
     )
     markup = image_models_keyboard(db_user.current_image_model)
 
@@ -45,12 +48,12 @@ async def select_image_model(callback: CallbackQuery, db_session: AsyncSession, 
     model_key = callback.data.split(":", 1)[1]
 
     if model_key not in IMAGE_MODELS:
-        await callback.answer("Неизвестная модель.", show_alert=True)
+        await callback.answer("Unknown model.", show_alert=True)
         return
 
     if model_key == db_user.current_image_model:
         try:
-            await callback.answer("Эта модель уже выбрана ✅")
+            await callback.answer("This model is already selected ✅")
         except Exception:
             pass
         return

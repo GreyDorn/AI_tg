@@ -32,6 +32,14 @@ def _is_waiting_for_image(message: Message) -> bool:
     return bool(message.from_user and message.from_user.id in _pending_image_users)
 
 
+def _format_cost(cost: int) -> str:
+    if cost == 0:
+        return "free"
+    if cost == 1:
+        return "1 request"
+    return f"{cost} requests"
+
+
 def _get_image_model(db_user: User) -> tuple[str, object]:
     model_key = db_user.current_image_model
     if model_key not in IMAGE_MODELS:
@@ -41,26 +49,22 @@ def _get_image_model(db_user: User) -> tuple[str, object]:
 
 async def _show_image_help(message: Message, db_user: User, waiting: bool = False) -> None:
     model_key, model_cfg = _get_image_model(db_user)
-    cost = (
-        "бесплатно"
-        if model_cfg.cost_per_image == 0
-        else f"{model_cfg.cost_per_image} запроса"
-    )
+    cost = _format_cost(model_cfg.cost_per_image)
 
     if waiting:
         text = (
-            f"🎨 <b>Опишите картинку одним сообщением</b>\n\n"
-            f"Модель: <b>{model_cfg.name}</b> ({cost})\n"
-            f"Например: <code>кот-космонавт на Луне</code>\n\n"
-            f"Сменить модель → /imagemodels"
+            f"🎨 <b>Describe your image in one message</b>\n\n"
+            f"Model: <b>{model_cfg.name}</b> ({cost})\n"
+            f"Example: <code>astronaut cat on the Moon</code>\n\n"
+            f"Change model → /imagemodels"
         )
     else:
         text = (
-            f"🎨 <b>Генерация картинок</b>\n\n"
-            f"Модель: <b>{model_cfg.name}</b> ({cost})\n\n"
-            f"Отправьте команду:\n"
-            f"<code>/image кот-космонавт на Луне</code>\n\n"
-            f"Сменить модель → /imagemodels"
+            f"🎨 <b>Image Generation</b>\n\n"
+            f"Model: <b>{model_cfg.name}</b> ({cost})\n\n"
+            f"Send a command:\n"
+            f"<code>/image astronaut cat on the Moon</code>\n\n"
+            f"Change model → /imagemodels"
         )
     await message.answer(text, parse_mode="HTML", reply_markup=image_models_keyboard(model_key))
 
@@ -79,23 +83,23 @@ async def _generate_and_send(
     cost = model_cfg.cost_per_image
 
     if len(prompt) > 1000:
-        await message.answer("❌ Описание слишком длинное. Максимум 1000 символов.")
+        await message.answer("❌ Description is too long. Maximum 1000 characters.")
         return
 
     if cost > 0 and db_user.credits < cost and not db_user.has_unlimited_access:
         await message.answer(
-            f"❌ <b>Недостаточно запросов</b>\n\n"
-            f"Модель <b>{model_cfg.name}</b> стоит <b>{cost}</b> запроса.\n"
-            f"У вас: <b>{db_user.credits}</b>\n\n"
-            f"Выберите бесплатную модель → /imagemodels\n"
-            f"Безлимит → /buy",
+            f"❌ <b>Not enough requests</b>\n\n"
+            f"<b>{model_cfg.name}</b> costs <b>{cost}</b> requests.\n"
+            f"You have: <b>{db_user.credits}</b>\n\n"
+            f"Try a free model → /imagemodels\n"
+            f"Unlimited access → /buy",
             parse_mode="HTML",
             reply_markup=image_models_keyboard(model_key),
         )
         return
 
     status = await message.answer(
-        f"🎨 Рисую через <b>{model_cfg.name}</b>... Подождите 10–40 сек.",
+        f"🎨 Drawing with <b>{model_cfg.name}</b>... Please wait 10–40 sec.",
         parse_mode="HTML",
     )
     await message.bot.send_chat_action(message.chat.id, "upload_photo")
@@ -106,30 +110,30 @@ async def _generate_and_send(
         logger.error("Image generation failed user=%s model=%s: %s", db_user.id, model_key, exc)
         error_text = str(exc)
         if "429" in error_text or "quota" in error_text.lower() or "rate" in error_text.lower():
-            user_message = "⏳ Сервис перегружен. Попробуйте через минуту."
+            user_message = "⏳ Service is busy. Please try again in a minute."
         elif "402" in error_text or "insufficient" in error_text.lower() or "credits" in error_text.lower():
             user_message = (
-                f"💳 Модель <b>{model_cfg.name}</b> временно недоступна.\n\n"
-                f"Выберите бесплатную модель → /imagemodels"
+                f"💳 <b>{model_cfg.name}</b> is temporarily unavailable.\n\n"
+                f"Try a free model → /imagemodels"
             )
         elif "text instead of image" in error_text.lower():
             user_message = (
-                "⚠️ Модель вернула текст вместо картинки.\n"
-                "Попробуйте переформулировать описание."
+                "⚠️ The model returned text instead of an image.\n"
+                "Try rephrasing your description."
             )
         else:
-            user_message = "⚠️ Не удалось создать картинку. Попробуйте другую модель → /imagemodels"
+            user_message = "⚠️ Could not create the image. Try another model → /imagemodels"
         await status.edit_text(user_message, parse_mode="HTML", reply_markup=image_models_keyboard(model_key))
         return
     except Exception:
         logger.exception("Unexpected image generation error user=%s model=%s", db_user.id, model_key)
-        await status.edit_text("⚠️ Не удалось создать картинку. Попробуйте позже.")
+        await status.edit_text("⚠️ Could not create the image. Please try again later.")
         return
 
     if cost > 0 and not db_user.has_unlimited_access:
         spent = await spend_credits(db_session, db_user.id, cost)
         if not spent:
-            await status.edit_text("❌ Недостаточно запросов для завершения операции.")
+            await status.edit_text("❌ Not enough requests to complete this action.")
             return
 
     ext = _extension_for_mime(mime_type)
