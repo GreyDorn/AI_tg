@@ -14,6 +14,7 @@ from db.repository import (
     spend_credits,
     add_credits,
     update_user_model,
+    clear_waiting_modes,
 )
 from llm import get_llm
 from llm.gemini import GeminiLLM, VISION_UNAVAILABLE_MSG
@@ -254,13 +255,11 @@ async def handle_message(message: Message, db_session: AsyncSession, db_user: Us
 
 @router.message(F.photo)
 async def handle_photo(message: Message, db_session: AsyncSession, db_user: User) -> None:
+    exited_image_mode = db_user.waiting_for_image
     if db_user.waiting_for_image:
-        await message.answer(
-            "🎨 You are in <b>image drawing</b> mode.\n\n"
-            "Send a <b>text description</b>, or tap ❌ Cancel to exit.",
-            parse_mode="HTML",
-        )
-        return
+        await clear_waiting_modes(db_session, db_user.id)
+        db_user.waiting_for_image = False
+        db_user.waiting_for_music = False
     if db_user.waiting_for_music:
         return
 
@@ -319,7 +318,11 @@ async def handle_photo(message: Message, db_session: AsyncSession, db_user: User
     logger.info("Photo analysis user=%s prompt=%r size=%d", db_user.id, prompt[:120], len(image_bytes))
 
     await message.bot.send_chat_action(message.chat.id, "typing")
-    if switched_model:
+    if exited_image_mode and switched_model:
+        status = "📷 Left image mode — switched to <b>Gemini</b>, analyzing photo..."
+    elif exited_image_mode:
+        status = "📷 Left image mode — analyzing photo with Gemini..."
+    elif switched_model:
         status = "📷 Switched to <b>Gemini</b> — analyzing photo..."
     else:
         status = "📷 Analyzing with Gemini..."
