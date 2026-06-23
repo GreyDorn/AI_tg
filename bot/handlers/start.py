@@ -42,7 +42,8 @@ async def cmd_help(message: Message) -> None:
         f"/start — main menu\n"
         f"/newchat — start a new conversation\n"
         f"/models — choose a model\n"
-        f"/image — create an image (AI)\n"
+        f"/image — create an HD image (AI, {IMAGE_COST_CREDITS} requests)\n"
+        f"/imagefree — create a free image (0 requests)\n"
         f"/balance — your request balance\n"
         f"/buy — unlimited subscription\n"
         f"/referral — referral program\n"
@@ -52,7 +53,8 @@ async def cmd_help(message: Message) -> None:
         f"• {FREE_CREDITS_ON_START} requests on registration\n"
         f"• +{DAILY_FREE_CREDITS} every day\n"
         f"• +{REFERRAL_BONUS_CREDITS} for each referred friend\n\n"
-        f"🎨 <b>Image generation</b> — /image (costs {IMAGE_COST_CREDITS} requests)\n"
+        f"🎨 <b>HD image</b> — /image (costs {IMAGE_COST_CREDITS} requests)\n"
+        f"🆓 <b>Free image</b> — /imagefree (0 requests)\n"
         f"💎 <b>Unlimited subscription</b> — {SUBSCRIPTION_PRICE_STARS} ⭐/month",
         parse_mode="HTML",
     )

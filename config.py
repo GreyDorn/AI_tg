@@ -99,6 +99,12 @@ IMAGE_FALLBACK_MODEL_ID = "black-forest-labs/flux.2-klein-4b"
 IMAGE_MAX_TOKENS = 1024
 IMAGE_COST_CREDITS = 3
 
+# Free image generation (Pollinations, no API key required)
+IMAGE_FREE_MODEL = "flux"
+IMAGE_FREE_WIDTH = 1024
+IMAGE_FREE_HEIGHT = 1024
+IMAGE_FREE_COST_CREDITS = 0
+
 # Subscription
 SUBSCRIPTION_PRICE_STARS = 299   # price in Telegram Stars
 SUBSCRIPTION_DAYS = 30           # duration in days

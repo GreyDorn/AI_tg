@@ -52,7 +52,7 @@ async def _answer_formatted(message: Message, text: str) -> None:
         await message.answer(html.escape(text))
 
 
-@router.message(F.text & ~F.text.startswith("/") & ~F.text.in_({"💬 New Chat", "🤖 Models", "💰 Balance", "👥 Referral", "💎 Subscription", "🎨 Create Image"}))
+@router.message(F.text & ~F.text.startswith("/") & ~F.text.in_({"💬 New Chat", "🤖 Models", "💰 Balance", "👥 Referral", "💎 Subscription", "🎨 Create Image", "🆓 Free Image"}))
 async def handle_message(message: Message, db_session: AsyncSession, db_user: User) -> None:
     model_key = db_user.current_model
     model_cfg = MODELS[model_key]

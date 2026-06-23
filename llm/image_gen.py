@@ -7,6 +7,9 @@ from config import (
     IMAGE_MODEL_ID,
     IMAGE_FALLBACK_MODEL_ID,
     IMAGE_MAX_TOKENS,
+    IMAGE_FREE_MODEL,
+    IMAGE_FREE_WIDTH,
+    IMAGE_FREE_HEIGHT,
 )
 
 logger = logging.getLogger(__name__)
@@ -73,21 +76,37 @@ async def _generate_openrouter(model: str, prompt: str) -> tuple[bytes, str]:
             return await resp.read(), content_type.split(";")[0]
 
 
-async def _generate_pollinations(prompt: str) -> tuple[bytes, str]:
-    url = POLLINATIONS_URL.format(prompt=urllib.parse.quote(prompt))
+async def _generate_pollinations(
+    prompt: str,
+    *,
+    model: str = IMAGE_FREE_MODEL,
+    width: int = IMAGE_FREE_WIDTH,
+    height: int = IMAGE_FREE_HEIGHT,
+    enhance: bool = False,
+) -> tuple[bytes, str]:
+    params = urllib.parse.urlencode(
+        {
+            "model": model,
+            "width": width,
+            "height": height,
+            "enhance": str(enhance).lower(),
+            "nologo": "true",
+        }
+    )
+    url = f"{POLLINATIONS_URL.format(prompt=urllib.parse.quote(prompt))}?{params}"
     async with aiohttp.ClientSession() as session:
         async with session.get(url, timeout=aiohttp.ClientTimeout(total=120)) as resp:
             if resp.status != 200:
-                raise ImageGenerationError(f"Fallback API error {resp.status}")
+                raise ImageGenerationError(f"Free image API error {resp.status}")
             content_type = resp.headers.get("Content-Type", "image/jpeg")
             data = await resp.read()
             if len(data) < 1000:
-                raise ImageGenerationError("Fallback API returned empty image")
+                raise ImageGenerationError("Free image API returned empty image")
             return data, content_type.split(";")[0]
 
 
 async def generate_image(prompt: str) -> tuple[bytes, str]:
-    """Generate an image and return (bytes, mime_type)."""
+    """Generate a premium image via OpenRouter with Pollinations fallback."""
     errors: list[str] = []
 
     if OPENROUTER_API_KEY:
@@ -101,7 +120,7 @@ async def generate_image(prompt: str) -> tuple[bytes, str]:
                 errors.append(str(exc))
 
     try:
-        result = await _generate_pollinations(prompt)
+        result = await _generate_pollinations(prompt, enhance=True)
         logger.info("Image generated via Pollinations fallback")
         return result
     except ImageGenerationError as exc:
@@ -109,3 +128,16 @@ async def generate_image(prompt: str) -> tuple[bytes, str]:
         errors.append(str(exc))
 
     raise ImageGenerationError("; ".join(errors[-2:]) if errors else "Image generation is not configured")
+
+
+async def generate_image_free(prompt: str) -> tuple[bytes, str]:
+    """Generate a free image via Pollinations (Flux)."""
+    try:
+        result = await _generate_pollinations(prompt, model=IMAGE_FREE_MODEL, enhance=True)
+        logger.info("Free image generated via Pollinations model=%s", IMAGE_FREE_MODEL)
+        return result
+    except ImageGenerationError:
+        # turbo is faster and also free on Pollinations
+        result = await _generate_pollinations(prompt, model="turbo", enhance=False)
+        logger.info("Free image generated via Pollinations model=turbo")
+        return result
