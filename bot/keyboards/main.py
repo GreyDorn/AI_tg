@@ -25,8 +25,9 @@ def models_keyboard(current_model: str) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     for key, model in MODELS.items():
         mark = "✅ " if key == current_model else ""
+        vision = " 📷" if model.supports_vision else ""
         builder.button(
-            text=f"{mark}{model.name}",
+            text=f"{mark}{model.name}{vision}",
             callback_data=f"model:{key}",
         )
     builder.adjust(1)

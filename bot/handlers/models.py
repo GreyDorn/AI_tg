@@ -18,7 +18,8 @@ async def _show_models(target: Message | CallbackQuery, db_user: User, db_sessio
     text = (
         f"🤖 <b>Choose a Model</b>\n\n"
         f"Current: <b>{MODELS[db_user.current_model].name}</b>\n\n"
-        f"1 request per message for all models."
+        f"1 request per message for all models.\n"
+        f"📷 — can read photos in chat (Gemini)"
     )
     markup = models_keyboard(db_user.current_model)
 

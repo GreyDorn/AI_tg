@@ -87,6 +87,8 @@ async def _reply_streaming(
     model_name: str,
     credits_spent: int,
     stream,
+    *,
+    vision_mode: bool = False,
 ) -> None:
     full_response = ""
     last_edit_time = asyncio.get_event_loop().time()
@@ -121,13 +123,22 @@ async def _reply_streaming(
         logger.error("LLM error for user %s model %s: %s", db_user.id, model_key, error_str)
 
         if "429" in error_str or "quota" in error_str.lower() or "rate" in error_str.lower() or "resource_exhausted" in error_str.lower():
-            await reply.edit_text(
-                f"⏳ <b>Model is overloaded</b>\n\n"
-                f"<b>{model_name}</b> has reached its request limit.\n\n"
-                f"Choose another model 👇",
-                parse_mode="HTML",
-                reply_markup=models_keyboard(model_key),
-            )
+            if vision_mode:
+                await reply.edit_text(
+                    "⏳ <b>Gemini limit reached</b>\n\n"
+                    "Photo analysis uses <b>Gemini</b> only — other models cannot read images.\n\n"
+                    "The free quota is exhausted for now. Try again later, "
+                    "or use text chat with another model via 🤖 <b>Models</b>.",
+                    parse_mode="HTML",
+                )
+            else:
+                await reply.edit_text(
+                    f"⏳ <b>Model is overloaded</b>\n\n"
+                    f"<b>{model_name}</b> has reached its request limit.\n\n"
+                    f"Choose another model 👇",
+                    parse_mode="HTML",
+                    reply_markup=models_keyboard(model_key),
+                )
         elif "402" in error_str or "insufficient balance" in error_str.lower() or "payment required" in error_str.lower():
             await reply.edit_text(
                 f"💳 <b>Model temporarily unavailable</b>\n\n"
@@ -320,4 +331,5 @@ async def handle_photo(message: Message, db_session: AsyncSession, db_user: User
             context,
             vision_cfg.id,
         ),
+        vision_mode=True,
     )

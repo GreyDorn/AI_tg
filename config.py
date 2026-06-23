@@ -14,6 +14,7 @@ class LLMModel:
     description: str
     cost_per_message: int
     disable_thinking: bool = False
+    supports_vision: bool = False
 
 
 MODELS: Dict[str, LLMModel] = {
@@ -21,8 +22,9 @@ MODELS: Dict[str, LLMModel] = {
         id="gemini-2.5-flash-lite",
         name="Gemini 2.5 Flash",
         provider="google",
-        description="Fast & smart model by Google",
+        description="Fast & smart — reads photos in chat",
         cost_per_message=1,
+        supports_vision=True,
     ),
     "llama-3.3-70b": LLMModel(
         id="llama-3.3-70b-versatile",
