@@ -4,9 +4,12 @@ from config import GROQ_API_KEY, MAX_CONTEXT_CHARS
 from db.models import Message
 from llm.base import BaseLLM
 
+_QWEN_THINK_OPEN = chr(60) + "think" + chr(62)
+_QWEN_THINK_CLOSE = chr(60) + "/" + "think" + chr(62)
+
 THINKING_TAGS = (
     ("<think>", "</think>"),
-    ("", ""),
+    (_QWEN_THINK_OPEN, _QWEN_THINK_CLOSE),
 )
 
 
@@ -53,6 +56,8 @@ class GroqLLM(BaseLLM):
     def _find_open_tag(text: str, start: int) -> tuple[int, str, str] | None:
         best: tuple[int, str, str] | None = None
         for open_tag, close_tag in THINKING_TAGS:
+            if not open_tag:
+                continue
             pos = text.find(open_tag, start)
             if pos != -1 and (best is None or pos < best[0]):
                 best = (pos, open_tag, close_tag)
@@ -80,9 +85,10 @@ class GroqLLM(BaseLLM):
                 end = text.find(active_close_tag, i)
                 if end == -1:
                     break
+                close_len = len(active_close_tag)
                 in_think = False
                 active_close_tag = ""
-                i = end + len(active_close_tag)
+                i = end + close_len
         return result, in_think, active_close_tag
 
     def _trim_context(self, history: list[dict]) -> list[dict]:

@@ -173,16 +173,10 @@ async def grant_unlimited(session: AsyncSession, user_id: int) -> bool:
     return True
 
 
-async def activate_subscription(session: AsyncSession, user_id: int, days: int = 30) -> datetime:
-    """Активирует платную подписку на N дней. Возвращает дату окончания."""
-    user = await session.get(User, user_id)
-    if not user:
-        return None
+def _extend_subscription(user: User, days: int) -> datetime:
     now = datetime.now()
     base = user.subscription_until if user.subscription_until and user.subscription_until > now else now
-    user.subscription_until = base + timedelta(days=days)
-    await session.commit()
-    return user.subscription_until
+    return base + timedelta(days=days)
 
 
 @dataclass
@@ -213,9 +207,7 @@ async def process_subscription_payment(
     if not user:
         return PaymentResult(subscription_until=None, is_duplicate=False)
 
-    now = datetime.now()
-    base = user.subscription_until if user.subscription_until and user.subscription_until > now else now
-    subscription_until = base + timedelta(days=days)
+    subscription_until = _extend_subscription(user, days)
     user.subscription_until = subscription_until
 
     session.add(

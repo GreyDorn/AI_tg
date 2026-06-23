@@ -1,14 +1,14 @@
 import logging
 from aiogram import Router, F
 from aiogram.filters import Command, CommandObject
-from aiogram.types import Message, BufferedInputFile
+from aiogram.types import Message, BufferedInputFile, CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 from config import IMAGE_MODELS
 from db.models import User
 from db.repository import spend_credits, update_user_image_model
 from llm.image_gen import generate_image, ImageGenerationError
 from llm.provider_status import resolve_image_model_key
-from bot.keyboards.main import image_models_keyboard
+from bot.keyboards.main import image_models_keyboard, cancel_keyboard
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -65,7 +65,11 @@ async def _show_image_help(message: Message, db_user: User, waiting: bool = Fals
             f"<code>/image astronaut cat on the Moon</code>\n\n"
             f"Change model → /imagemodels"
         )
-    await message.answer(text, parse_mode="HTML", reply_markup=image_models_keyboard(model_key))
+    await message.answer(
+        text,
+        parse_mode="HTML",
+        reply_markup=cancel_keyboard() if waiting else image_models_keyboard(model_key),
+    )
 
 
 async def _generate_and_send(
@@ -146,6 +150,16 @@ async def _generate_and_send(
         BufferedInputFile(image_bytes, filename=f"image.{ext}"),
         caption=caption,
     )
+
+
+@router.callback_query(F.data == "cancel")
+async def cancel_image_prompt(callback: CallbackQuery) -> None:
+    if not callback.from_user or callback.from_user.id not in _pending_image_users:
+        await callback.answer("Nothing to cancel.")
+        return
+    _pending_image_users.discard(callback.from_user.id)
+    await callback.message.edit_text("❌ Image generation cancelled.")
+    await callback.answer()
 
 
 @router.message(Command("image"))

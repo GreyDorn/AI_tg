@@ -67,6 +67,7 @@ MODELS: Dict[str, LLMModel] = {
         provider="groq",
         description="Groq's flagship compound model",
         cost_per_message=1,
+        disable_thinking=True,
     ),
     "compound-mini": LLMModel(
         id="groq/compound-mini",
@@ -74,6 +75,7 @@ MODELS: Dict[str, LLMModel] = {
         provider="groq",
         description="Fast compact model by Groq",
         cost_per_message=1,
+        disable_thinking=True,
     ),
     "deepseek-v3": LLMModel(
         id="deepseek-chat",
