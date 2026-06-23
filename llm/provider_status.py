@@ -125,13 +125,10 @@ async def probe_openrouter_paid() -> bool:
         logger.warning("OpenRouter probe failed: %s", exc)
         new_status = was if was is not None else bool(OPENROUTER_API_KEY)
 
-    if was != new_status:
+    if was is None or was != new_status:
         _update_paid_available(new_status)
-    elif _openrouter_paid_available is None:
-        _openrouter_paid_available = new_status
-        logger.info("OpenRouter paid models available: %s", new_status)
 
-    return _openrouter_paid_available
+    return is_openrouter_paid_available()
 
 
 async def _fetch_openrouter_key_info() -> dict | None:
