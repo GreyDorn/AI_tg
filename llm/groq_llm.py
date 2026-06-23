@@ -12,6 +12,12 @@ THINKING_TAGS = (
     (_QWEN_THINK_OPEN, _QWEN_THINK_CLOSE),
 )
 
+COMPOUND_MODEL_IDS = frozenset({"groq/compound", "groq/compound-mini"})
+COMPOUND_SYSTEM_PROMPT = (
+    "Reply with only the final answer. "
+    "No reasoning, no explanation, no headers."
+)
+
 
 class GroqLLM(BaseLLM):
     def __init__(self):
@@ -22,6 +28,9 @@ class GroqLLM(BaseLLM):
     ) -> AsyncIterator[str]:
         history = self._build_history(messages)
         history = self._trim_context(history)
+        if model_id in COMPOUND_MODEL_IDS and disable_thinking:
+            if not history or history[0].get("role") != "system":
+                history.insert(0, {"role": "system", "content": COMPOUND_SYSTEM_PROMPT})
 
         stream = await self.client.chat.completions.create(
             model=model_id,
