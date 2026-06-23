@@ -1,6 +1,7 @@
 import json
 import logging
 import aiohttp
+from types import SimpleNamespace
 from typing import AsyncIterator
 from config import DEEPSEEK_API_KEY, OPENROUTER_API_KEY, MAX_CONTEXT_CHARS
 from db.models import Message
@@ -22,8 +23,19 @@ ROUTES: dict[str, list[tuple[str, str]]] = {
     "deepseek-reasoner": [
         ("direct", "deepseek-reasoner"),
         ("openrouter", "deepseek/deepseek-r1"),
-        ("groq", "openai/gpt-oss-120b"),
+        ("groq", "qwen/qwen3-32b"),
     ],
+}
+
+FALLBACK_IDENTITY = {
+    "deepseek-chat": (
+        "You are DeepSeek V3 in a Telegram AI bot. "
+        "If asked who you are, identify as DeepSeek, not ChatGPT or OpenAI."
+    ),
+    "deepseek-reasoner": (
+        "You are DeepSeek R1 (reasoning model) in a Telegram AI bot. "
+        "If asked who you are, identify as DeepSeek R1, not ChatGPT or OpenAI."
+    ),
 }
 
 
@@ -38,6 +50,14 @@ def _is_retryable_error(exc: Exception) -> bool:
         or "no endpoints found" in error_str
         or "decommissioned" in error_str
     )
+
+
+def _with_fallback_identity(messages: list[Message], model_id: str) -> list:
+    prompt = FALLBACK_IDENTITY.get(model_id)
+    if not prompt:
+        return messages
+    system = SimpleNamespace(role="system", content=prompt)
+    return [system, *messages]
 
 
 class DeepSeekLLM(BaseLLM):
@@ -64,7 +84,9 @@ class DeepSeekLLM(BaseLLM):
                 elif backend == "openrouter":
                     stream = self._openrouter.stream(messages, actual_model, disable_thinking)
                 elif backend == "groq":
-                    stream = self._groq.stream(messages, actual_model, disable_thinking)
+                    groq_messages = _with_fallback_identity(messages, model_id)
+                    groq_thinking = disable_thinking or model_id == "deepseek-reasoner"
+                    stream = self._groq.stream(groq_messages, actual_model, groq_thinking)
                 else:
                     continue
 
