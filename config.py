@@ -110,6 +110,8 @@ MODELS: Dict[str, LLMModel] = {
 }
 
 DEFAULT_MODEL = "llama-3.3-70b"
+VISION_MODEL_KEY = "gemini-2.0-flash"
+DEFAULT_VISION_PROMPT = "What is shown in this image? Describe it in detail."
 
 
 @dataclass

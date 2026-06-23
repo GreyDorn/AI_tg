@@ -19,6 +19,7 @@ async def cmd_start(message: Message, db_session: AsyncSession, db_user: User) -
         "• Analyze and explain\n"
         "• Translate and edit\n"
         "• Create images with /image\n"
+        "• Analyze photos (send an image in chat)\n"
     )
     if is_music_feature_enabled():
         features += "• Create music with /music\n"
