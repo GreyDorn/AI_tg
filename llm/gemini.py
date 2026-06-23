@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 
 GEMINI_FALLBACK_MODEL = "llama-3.3-70b-versatile"
 VISION_UNAVAILABLE_MSG = "Photo analysis is not available (Gemini API key is missing)."
-VISION_FALLBACK_MODELS = ("gemini-2.5-flash-lite", "gemini-2.0-flash", "gemini-2.5-flash")
 VISION_SYSTEM_PROMPT = (
     "You analyze images in a Telegram chat. Describe what you see clearly and answer "
     "the user's question. Reply in the same language the user uses."
@@ -72,14 +71,6 @@ def _build_vision_contents(
     else:
         contents.append(types.Content(role="user", parts=image_parts))
     return contents
-
-
-def _vision_model_candidates(model_id: str) -> list[str]:
-    models: list[str] = []
-    for candidate in (model_id, *VISION_FALLBACK_MODELS):
-        if candidate not in models:
-            models.append(candidate)
-    return models
 
 
 class GeminiLLM(BaseLLM):
@@ -183,33 +174,31 @@ class GeminiLLM(BaseLLM):
             system_prompt if system_prompt is not None else VISION_SYSTEM_PROMPT
         )
         last_exc: Exception | None = None
-        for candidate_model in _vision_model_candidates(model_id):
-            for attempt in range(VISION_MAX_RETRIES):
-                try:
-                    async for chunk in self._stream_vision_once(
-                        image_bytes,
-                        mime_type,
-                        prompt,
-                        messages,
-                        candidate_model,
-                        vision_system_prompt,
-                    ):
-                        yield chunk
-                    return
-                except Exception as exc:
-                    last_exc = exc
-                    if not _is_retryable_error(exc):
-                        raise
-                    logger.warning(
-                        "Gemini vision failed model=%s attempt=%s/%s: %s",
-                        candidate_model,
-                        attempt + 1,
-                        VISION_MAX_RETRIES,
-                        exc,
-                    )
-                    if attempt + 1 < VISION_MAX_RETRIES:
-                        await asyncio.sleep(VISION_RETRY_DELAY_SEC * (attempt + 1))
-            logger.warning("Gemini vision switching model after failures: %s", candidate_model)
+        for attempt in range(VISION_MAX_RETRIES):
+            try:
+                async for chunk in self._stream_vision_once(
+                    image_bytes,
+                    mime_type,
+                    prompt,
+                    messages,
+                    model_id,
+                    vision_system_prompt,
+                ):
+                    yield chunk
+                return
+            except Exception as exc:
+                last_exc = exc
+                if not _is_retryable_error(exc):
+                    raise
+                logger.warning(
+                    "Gemini vision failed model=%s attempt=%s/%s: %s",
+                    model_id,
+                    attempt + 1,
+                    VISION_MAX_RETRIES,
+                    exc,
+                )
+                if attempt + 1 < VISION_MAX_RETRIES:
+                    await asyncio.sleep(VISION_RETRY_DELAY_SEC * (attempt + 1))
 
         if last_exc:
             raise last_exc
