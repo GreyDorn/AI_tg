@@ -2,10 +2,10 @@ from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
-from config import IMAGE_MODELS, DEFAULT_IMAGE_MODEL
+from config import IMAGE_MODELS
 from db.models import User
 from db.repository import update_user_image_model, set_waiting_for_image
-from bot.keyboards.main import image_models_keyboard
+from bot.keyboards.main import image_models_keyboard, cancel_keyboard
 from llm.provider_status import get_available_image_models, resolve_image_model_key
 
 router = Router()
@@ -19,11 +19,36 @@ def _format_cost(cost: int) -> str:
     return f"{cost} requests"
 
 
-async def _show_image_models(target: Message | CallbackQuery, db_user: User, db_session: AsyncSession) -> None:
+async def _enable_image_waiting(db_session: AsyncSession, db_user: User) -> None:
+    if not db_user.waiting_for_image:
+        await set_waiting_for_image(db_session, db_user.id, True)
+        db_user.waiting_for_image = True
+
+
+async def _send_image_waiting_hint(target: Message, model_name: str) -> None:
+    await target.answer(
+        f"🎨 <b>Ready to draw</b> — model: <b>{model_name}</b>\n\n"
+        f"Describe your image in the <b>next message</b>.\n"
+        f"Example: <code>astronaut cat on the Moon</code>",
+        parse_mode="HTML",
+        reply_markup=cancel_keyboard(),
+    )
+
+
+async def _show_image_models(
+    target: Message | CallbackQuery,
+    db_user: User,
+    db_session: AsyncSession,
+    *,
+    enable_waiting: bool = False,
+) -> str:
     model_key = resolve_image_model_key(db_user.current_image_model)
     if model_key != db_user.current_image_model:
         db_user.current_image_model = model_key
         await update_user_image_model(db_session, db_user.id, model_key)
+
+    if enable_waiting:
+        await _enable_image_waiting(db_session, db_user)
 
     available = get_available_image_models()
     current = available[model_key]
@@ -34,8 +59,7 @@ async def _show_image_models(target: Message | CallbackQuery, db_user: User, db_
     text = (
         f"🖼 <b>Image Models</b>\n\n"
         f"Current: <b>{current.name}</b> ({_format_cost(current.cost_per_image)})\n\n"
-        f"Pick a model, then describe your image below 👇\n"
-        f"Or send: <code>/image your description</code>"
+        f"Pick a model or just describe your image in the <b>next message</b> 👇"
         f"{hidden_note}"
     )
     markup = image_models_keyboard(model_key)
@@ -44,12 +68,14 @@ async def _show_image_models(target: Message | CallbackQuery, db_user: User, db_
         await target.message.edit_text(text, parse_mode="HTML", reply_markup=markup)
     else:
         await target.answer(text, parse_mode="HTML", reply_markup=markup)
+    return current.name
 
 
 @router.message(Command("imagemodels"))
 @router.message(F.text == "🖼 Image Models")
 async def cmd_image_models(message: Message, db_session: AsyncSession, db_user: User) -> None:
-    await _show_image_models(message, db_user, db_session)
+    model_name = await _show_image_models(message, db_user, db_session, enable_waiting=True)
+    await _send_image_waiting_hint(message, model_name)
 
 
 @router.callback_query(F.data.startswith("imagemodel:"))
@@ -61,26 +87,22 @@ async def select_image_model(callback: CallbackQuery, db_session: AsyncSession, 
         await callback.answer("This model is currently unavailable.", show_alert=True)
         return
 
-    if model_key == db_user.current_image_model:
-        try:
-            await callback.answer("This model is already selected ✅")
-        except Exception:
-            pass
-        return
+    already_selected = model_key == db_user.current_image_model
 
-    await update_user_image_model(db_session, db_user.id, model_key)
-    db_user.current_image_model = model_key
-    await set_waiting_for_image(db_session, db_user.id, True)
-    db_user.waiting_for_image = True
+    if not already_selected:
+        await update_user_image_model(db_session, db_user.id, model_key)
+        db_user.current_image_model = model_key
+
+    model_name = await _show_image_models(
+        callback, db_user, db_session, enable_waiting=True
+    )
 
     try:
-        await callback.answer(f"✅ {IMAGE_MODELS[model_key].name} — now describe your image")
+        if already_selected:
+            await callback.answer(f"✅ {IMAGE_MODELS[model_key].name} — describe your image")
+        else:
+            await callback.answer(f"✅ {IMAGE_MODELS[model_key].name}")
     except Exception:
         pass
-    await _show_image_models(callback, db_user, db_session)
-    hint = (
-        f"🎨 <b>Model selected: {IMAGE_MODELS[model_key].name}</b>\n\n"
-        f"Describe your image in the <b>next message</b>.\n"
-        f"Example: <code>astronaut cat on the Moon</code>"
-    )
-    await callback.message.answer(hint, parse_mode="HTML")
+
+    await _send_image_waiting_hint(callback.message, model_name)
