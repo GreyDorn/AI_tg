@@ -14,6 +14,6 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
-            export APP_DIR="${{ secrets.DEPLOY_APP_DIR || '/opt/AI_tg' }}"
-            export SERVICE_NAME="${{ secrets.DEPLOY_SERVICE_NAME || 'ai-tg-bot' }}"
+            export APP_DIR="${{ secrets.DEPLOY_APP_DIR || '/root/tg_AI' }}"
+            export SERVICE_NAME="${{ secrets.DEPLOY_SERVICE_NAME || 'tg_ai_bot.service' }}"
             bash "$APP_DIR/scripts/deploy.sh"

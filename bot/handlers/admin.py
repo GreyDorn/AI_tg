@@ -2,9 +2,10 @@ from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
-from config import ADMIN_ID
+from config import ADMIN_ID, OPENROUTER_PROBE_INTERVAL
 from db.models import User
 from db.repository import grant_unlimited, get_user, get_bot_stats
+from llm.provider_status import get_openrouter_status, OPENROUTER_CREDITS_URL
 
 router = Router()
 
@@ -32,6 +33,48 @@ async def cmd_stats(message: Message, db_session: AsyncSession, db_user: User) -
         f"• Last 30 days: <b>{stats.payments_30d}</b> payments, <b>{stats.stars_30d}</b> ⭐",
         parse_mode="HTML",
     )
+
+
+@router.message(Command("openrouter"))
+async def cmd_openrouter(message: Message, db_user: User) -> None:
+    if db_user.id != ADMIN_ID:
+        return
+
+    status = await get_openrouter_status(force_probe=True)
+    if not status.configured:
+        await message.answer(
+            "⚠️ <b>OpenRouter is not configured</b>\n\n"
+            "Set <code>OPENROUTER_API_KEY</code> in <code>.env</code> on the server.",
+            parse_mode="HTML",
+        )
+        return
+
+    lines = ["💳 <b>OpenRouter status</b>\n"]
+    if status.paid_available:
+        lines.append("• Paid models: <b>available</b> ✅")
+    else:
+        lines.append("• Paid models: <b>hidden</b> (no credits) ❌")
+
+    if status.limit_remaining is not None:
+        lines.append(f"• Balance remaining: <b>${status.limit_remaining:.4f}</b>")
+    if status.usage is not None:
+        lines.append(f"• Total usage: <b>${status.usage:.4f}</b>")
+    if status.is_free_tier is not None:
+        lines.append(f"• Free tier only: <b>{'yes' if status.is_free_tier else 'no'}</b>")
+
+    if status.needs_topup:
+        lines.append(
+            f"\nTop up credits here:\n<a href=\"{OPENROUTER_CREDITS_URL}\">{OPENROUTER_CREDITS_URL}</a>\n\n"
+            "After payment, paid image models appear automatically within "
+            f"{OPENROUTER_PROBE_INTERVAL // 60} min (or restart the bot)."
+        )
+    else:
+        lines.append("\nGemini Image and Flux Klein are available in /imagemodels.")
+
+    if status.error:
+        lines.append(f"\n<i>{status.error}</i>")
+
+    await message.answer("\n".join(lines), parse_mode="HTML", disable_web_page_preview=True)
 
 
 @router.message(Command("grant"))
