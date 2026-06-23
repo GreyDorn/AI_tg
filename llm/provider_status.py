@@ -1,8 +1,12 @@
 import asyncio
 import logging
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 import aiohttp
 from config import OPENROUTER_API_KEY, OPENROUTER_PROBE_INTERVAL
+
+if TYPE_CHECKING:
+    from aiogram import Bot
 
 logger = logging.getLogger(__name__)
 
@@ -12,6 +16,8 @@ OPENROUTER_CREDITS_URL = "https://openrouter.ai/credits"
 
 _openrouter_paid_available: bool | None = None
 _probe_task: asyncio.Task | None = None
+_notify_bot: "Bot | None" = None
+_notify_admin_id: int = 0
 
 
 @dataclass
@@ -34,6 +40,45 @@ class OpenRouterStatus:
         return False
 
 
+def configure_openrouter_notifications(bot: "Bot", admin_id: int) -> None:
+    global _notify_bot, _notify_admin_id
+    _notify_bot = bot
+    _notify_admin_id = admin_id
+
+
+async def _notify_admin_status_change(was_available: bool, now_available: bool) -> None:
+    if _notify_bot is None or not _notify_admin_id:
+        return
+    if was_available == now_available:
+        return
+    if now_available:
+        text = (
+            "✅ <b>OpenRouter credits restored</b>\n\n"
+            "Gemini Image and Flux Klein are now available in /imagemodels."
+        )
+    else:
+        text = (
+            "⚠️ <b>OpenRouter credits depleted</b>\n\n"
+            "Premium image models are hidden. Free models still work.\n"
+            f"Top up: {OPENROUTER_CREDITS_URL}"
+        )
+    try:
+        await _notify_bot.send_message(
+            _notify_admin_id, text, parse_mode="HTML", disable_web_page_preview=True
+        )
+    except Exception as exc:
+        logger.warning("Failed to notify admin about OpenRouter status: %s", exc)
+
+
+def _update_paid_available(available: bool) -> None:
+    global _openrouter_paid_available
+    was = _openrouter_paid_available
+    _openrouter_paid_available = available
+    logger.info("OpenRouter paid models available: %s", available)
+    if was is not None and was != available:
+        asyncio.create_task(_notify_admin_status_change(was, available))
+
+
 def is_openrouter_paid_available() -> bool:
     if _openrouter_paid_available is not None:
         return _openrouter_paid_available
@@ -41,19 +86,16 @@ def is_openrouter_paid_available() -> bool:
 
 
 def set_openrouter_paid_available(available: bool) -> None:
-    global _openrouter_paid_available
-    _openrouter_paid_available = available
-    logger.info("OpenRouter paid models available: %s", available)
+    _update_paid_available(available)
 
 
 async def probe_openrouter_paid() -> bool:
     """Check whether OpenRouter paid endpoints accept requests (not 402)."""
-    global _openrouter_paid_available
-
     if not OPENROUTER_API_KEY:
-        _openrouter_paid_available = False
+        _update_paid_available(False)
         return False
 
+    was = _openrouter_paid_available
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
@@ -64,6 +106,7 @@ async def probe_openrouter_paid() -> bool:
         "max_tokens": 1,
     }
 
+    new_status = bool(OPENROUTER_API_KEY)
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(
@@ -73,17 +116,21 @@ async def probe_openrouter_paid() -> bool:
                 timeout=aiohttp.ClientTimeout(total=30),
             ) as resp:
                 if resp.status == 200:
-                    _openrouter_paid_available = True
+                    new_status = True
                 elif resp.status == 402:
-                    _openrouter_paid_available = False
+                    new_status = False
                 else:
-                    # Other errors: keep models visible, runtime errors will explain.
-                    _openrouter_paid_available = True
+                    new_status = was if was is not None else True
     except Exception as exc:
         logger.warning("OpenRouter probe failed: %s", exc)
-        _openrouter_paid_available = bool(OPENROUTER_API_KEY)
+        new_status = was if was is not None else bool(OPENROUTER_API_KEY)
 
-    logger.info("OpenRouter paid models available: %s", _openrouter_paid_available)
+    if was != new_status:
+        _update_paid_available(new_status)
+    elif _openrouter_paid_available is None:
+        _openrouter_paid_available = new_status
+        logger.info("OpenRouter paid models available: %s", new_status)
+
     return _openrouter_paid_available
 
 

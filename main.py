@@ -6,7 +6,11 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from config import BOT_TOKEN, ADMIN_ID
 from db.repository import init_db, SessionFactory, grant_unlimited
-from llm.provider_status import probe_openrouter_paid, start_openrouter_probe_loop
+from llm.provider_status import (
+    probe_openrouter_paid,
+    start_openrouter_probe_loop,
+    configure_openrouter_notifications,
+)
 from bot.middlewares.user import UserMiddleware
 from bot.middlewares.ratelimit import RateLimitMiddleware
 from bot.middlewares.processing_lock import ProcessingLockMiddleware
@@ -32,14 +36,15 @@ async def main() -> None:
 
     openrouter_ok = await probe_openrouter_paid()
     logger.info("OpenRouter paid models: %s", "available" if openrouter_ok else "hidden")
+
+    bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    configure_openrouter_notifications(bot, ADMIN_ID)
     start_openrouter_probe_loop()
+    dp = Dispatcher()
 
     # Выдаём безлимит администратору
     async with SessionFactory() as session:
         await grant_unlimited(session, ADMIN_ID)
-
-    bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-    dp = Dispatcher()
 
     # Middleware регистрируется на все update-события
     dp.update.middleware(UserMiddleware())
