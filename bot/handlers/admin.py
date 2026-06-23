@@ -4,9 +4,34 @@ from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 from config import ADMIN_ID
 from db.models import User
-from db.repository import grant_unlimited, get_user
+from db.repository import grant_unlimited, get_user, get_bot_stats
 
 router = Router()
+
+
+@router.message(Command("stats"))
+async def cmd_stats(message: Message, db_session: AsyncSession, db_user: User) -> None:
+    if db_user.id != ADMIN_ID:
+        return
+
+    stats = await get_bot_stats(db_session)
+    await message.answer(
+        "📊 <b>Bot statistics</b>\n\n"
+        f"<b>Users</b>\n"
+        f"• Total: <b>{stats.total_users}</b>\n"
+        f"• New today: <b>{stats.new_today}</b>\n"
+        f"• New (7 days): <b>{stats.new_7d}</b>\n"
+        f"• Active (7 days): <b>{stats.active_users_7d}</b>\n"
+        f"• Subscribers: <b>{stats.active_subscribers}</b>\n"
+        f"• Unlimited: <b>{stats.unlimited_users}</b>\n\n"
+        f"<b>Messages</b>\n"
+        f"• Total user messages: <b>{stats.total_user_messages}</b>\n"
+        f"• Today: <b>{stats.messages_today}</b>\n\n"
+        f"<b>Payments (Stars)</b>\n"
+        f"• All time: <b>{stats.payments_total}</b> payments, <b>{stats.stars_total}</b> ⭐\n"
+        f"• Last 30 days: <b>{stats.payments_30d}</b> payments, <b>{stats.stars_30d}</b> ⭐",
+        parse_mode="HTML",
+    )
 
 
 @router.message(Command("grant"))

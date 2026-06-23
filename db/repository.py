@@ -1,6 +1,6 @@
 from datetime import datetime, date, timedelta
 from dataclasses import dataclass
-from sqlalchemy import select, delete, text
+from sqlalchemy import select, delete, text, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from config import DATABASE_URL, FREE_CREDITS_ON_START, DAILY_FREE_CREDITS, REFERRAL_BONUS_CREDITS
@@ -231,4 +231,88 @@ async def process_subscription_payment(
         raise
 
     return PaymentResult(subscription_until=subscription_until, is_duplicate=False)
+
+
+# ── Admin stats ───────────────────────────────────────────────────────────────
+
+@dataclass
+class BotStats:
+    total_users: int
+    new_today: int
+    new_7d: int
+    active_subscribers: int
+    unlimited_users: int
+    total_user_messages: int
+    messages_today: int
+    active_users_7d: int
+    payments_total: int
+    stars_total: int
+    payments_30d: int
+    stars_30d: int
+
+
+async def get_bot_stats(session: AsyncSession) -> BotStats:
+    now = datetime.now()
+    today_start = datetime.combine(date.today(), datetime.min.time())
+    week_start = now - timedelta(days=7)
+    month_start = now - timedelta(days=30)
+
+    async def count(stmt) -> int:
+        result = await session.execute(stmt)
+        return int(result.scalar_one() or 0)
+
+    total_users = await count(select(func.count()).select_from(User))
+    new_today = await count(
+        select(func.count()).select_from(User).where(User.created_at >= today_start)
+    )
+    new_7d = await count(
+        select(func.count()).select_from(User).where(User.created_at >= week_start)
+    )
+    active_subscribers = await count(
+        select(func.count()).select_from(User).where(User.subscription_until > now)
+    )
+    unlimited_users = await count(
+        select(func.count()).select_from(User).where(User.is_unlimited.is_(True))
+    )
+    total_user_messages = await count(
+        select(func.count()).select_from(Message).where(Message.role == "user")
+    )
+    messages_today = await count(
+        select(func.count())
+        .select_from(Message)
+        .where(Message.role == "user", Message.created_at >= today_start)
+    )
+    active_users_7d = await count(
+        select(func.count(func.distinct(Conversation.user_id)))
+        .select_from(Message)
+        .join(Conversation, Message.conversation_id == Conversation.id)
+        .where(Message.role == "user", Message.created_at >= week_start)
+    )
+
+    pay_all = await session.execute(
+        select(func.count(), func.coalesce(func.sum(Payment.amount), 0)).select_from(Payment)
+    )
+    payments_total, stars_total = pay_all.one()
+
+    pay_month = await session.execute(
+        select(func.count(), func.coalesce(func.sum(Payment.amount), 0))
+        .select_from(Payment)
+        .where(Payment.created_at >= month_start)
+    )
+    payments_30d, stars_30d = pay_month.one()
+
+    return BotStats(
+        total_users=total_users,
+        new_today=new_today,
+        new_7d=new_7d,
+        active_subscribers=active_subscribers,
+        unlimited_users=unlimited_users,
+        total_user_messages=total_user_messages,
+        messages_today=messages_today,
+        active_users_7d=active_users_7d,
+        payments_total=int(payments_total or 0),
+        stars_total=int(stars_total or 0),
+        payments_30d=int(payments_30d or 0),
+        stars_30d=int(stars_30d or 0),
+    )
 
