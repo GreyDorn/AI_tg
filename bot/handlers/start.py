@@ -59,7 +59,7 @@ async def cmd_help(message: Message) -> None:
         f"• {FREE_CREDITS_ON_START} requests on registration\n"
         f"• +{DAILY_FREE_CREDITS} every day\n"
         f"• +{REFERRAL_BONUS_CREDITS} for each referred friend\n\n"
-        f"💎 <b>Unlimited subscription</b> — {SUBSCRIPTION_PRICE_STARS} ⭐/month",
+        f"💎 <b>Unlimited subscription</b> — {SUBSCRIPTION_PRICE_STARS} ⭐ per month",
         parse_mode="HTML",
     )
 

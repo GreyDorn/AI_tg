@@ -48,7 +48,7 @@ async def cmd_buy(message: Message, db_user: User) -> None:
         f"<b>Fair-use limit:</b>\n"
         f"• Up to <b>{RATE_LIMIT_MESSAGES} messages per {RATE_LIMIT_WINDOW} sec.</b> "
         f"(anti-spam protection for everyone)\n\n"
-        f"Price: <b>{SUBSCRIPTION_PRICE_STARS} ⭐ Stars / month</b>\n\n"
+        f"Price: <b>{SUBSCRIPTION_PRICE_STARS} ⭐ Stars per month</b>\n\n"
         f"ℹ️ Need stars? Tap <b>Buy Stars</b> below — the purchase window "
         f"opens right here (via PremiumBot), without leaving the chat.\n"
         f"Then tap <b>Subscribe</b> to activate unlimited access.",
