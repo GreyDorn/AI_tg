@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import FREE_CREDITS_ON_START, DAILY_FREE_CREDITS, REFERRAL_BONUS_CREDITS, SUBSCRIPTION_PRICE_STARS, IMAGE_MODELS, MUSIC_MODELS, MODELS
 from llm.music_gen import is_music_feature_enabled
 from db.models import User
-from db.repository import create_conversation
+from db.repository import create_conversation, set_waiting_for_image, set_waiting_for_music
 from bot.keyboards.main import main_menu
 
 router = Router()
@@ -90,6 +90,10 @@ async def cmd_help(message: Message) -> None:
 @router.message(Command("newchat"))
 @router.message(lambda m: m.text == "💬 New Chat")
 async def cmd_newchat(message: Message, db_session: AsyncSession, db_user: User) -> None:
+    await set_waiting_for_image(db_session, db_user.id, False)
+    await set_waiting_for_music(db_session, db_user.id, False)
+    db_user.waiting_for_image = False
+    db_user.waiting_for_music = False
     await create_conversation(db_session, db_user.id, db_user.current_model)
     await message.answer(
         f"✅ <b>New conversation started!</b>\n\n"

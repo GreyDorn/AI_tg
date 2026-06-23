@@ -55,6 +55,9 @@ async def _answer_formatted(message: Message, text: str) -> None:
 
 @router.message(F.text & ~F.text.startswith("/") & ~F.text.in_({"💬 New Chat", "🤖 Models", "💰 Balance", "👥 Referral", "💎 Subscription", "🎨 Create Image", "🖼 Image Models", "🎵 Create Music", "🎵 Music Models"}))
 async def handle_message(message: Message, db_session: AsyncSession, db_user: User) -> None:
+    if db_user.waiting_for_image or db_user.waiting_for_music:
+        return
+
     model_key = db_user.current_model
     model_cfg = MODELS[model_key]
 

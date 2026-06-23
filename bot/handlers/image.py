@@ -201,6 +201,9 @@ async def _generate_and_send(
         await message.answer(
             "⚠️ Image was generated but could not be sent. Please try again.",
         )
+        return
+
+    await _set_waiting(db_session, db_user, True)
 
 
 @router.callback_query(F.data == "cancel")
@@ -229,7 +232,6 @@ async def cmd_image(
         await _set_waiting(db_session, db_user, True)
         await _show_image_help(message, db_user, waiting=True)
         return
-    await _set_waiting(db_session, db_user, False)
     await _generate_and_send(message, db_session, db_user, prompt)
 
 
@@ -252,7 +254,6 @@ async def image_intent_message(
     prompt = _extract_image_intent_prompt(message.text or "")
     if not prompt:
         return
-    await _set_waiting(db_session, db_user, False)
     await _generate_and_send(message, db_session, db_user, prompt)
 
 
@@ -266,5 +267,4 @@ async def image_prompt_followup(
         await _set_waiting(db_session, db_user, False)
         return
 
-    await _set_waiting(db_session, db_user, False)
     await _generate_and_send(message, db_session, db_user, message.text.strip())
