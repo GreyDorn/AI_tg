@@ -4,7 +4,7 @@ import logging
 from aiogram import Router, F
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
-from config import MODELS, MAX_CONTEXT_MESSAGES, VISION_MODEL_KEY, DEFAULT_VISION_PROMPT, GEMINI_API_KEY
+from config import MODELS, MAX_CONTEXT_MESSAGES, DEFAULT_VISION_MODEL_KEY, DEFAULT_VISION_PROMPT, GEMINI_API_KEY, resolve_model_key
 from db.models import User
 from db.repository import (
     get_active_conversation,
@@ -57,8 +57,13 @@ async def _answer_formatted(message: Message, text: str) -> None:
         await message.answer(html.escape(text))
 
 
-def _vision_model_cfg():
-    return MODELS[VISION_MODEL_KEY]
+def _vision_model_for_user(db_user: User) -> tuple[str, object]:
+    current_key = resolve_model_key(db_user.current_model)
+    current_cfg = MODELS[current_key]
+    if current_cfg.supports_vision and current_cfg.provider == "google":
+        return current_key, current_cfg
+    default_cfg = MODELS[DEFAULT_VISION_MODEL_KEY]
+    return DEFAULT_VISION_MODEL_KEY, default_cfg
 
 
 async def _download_photo_bytes(message: Message) -> tuple[bytes, str]:
@@ -241,7 +246,10 @@ async def handle_message(message: Message, db_session: AsyncSession, db_user: Us
     if db_user.waiting_for_image or db_user.waiting_for_music:
         return
 
-    model_key = db_user.current_model
+    model_key = resolve_model_key(db_user.current_model)
+    if model_key != db_user.current_model:
+        await update_user_model(db_session, db_user.id, model_key)
+        db_user.current_model = model_key
     model_cfg = MODELS[model_key]
 
     if not await _ensure_credits(message, db_user, model_cfg.cost_per_message):
@@ -312,14 +320,14 @@ async def handle_photo(message: Message, db_session: AsyncSession, db_user: User
         )
         return
 
-    vision_cfg = _vision_model_cfg()
+    vision_key, vision_cfg = _vision_model_for_user(db_user)
     if not await _ensure_credits(message, db_user, vision_cfg.cost_per_message):
         return
 
-    switched_model = db_user.current_model != VISION_MODEL_KEY
+    switched_model = resolve_model_key(db_user.current_model) != vision_key
     if switched_model:
-        await update_user_model(db_session, db_user.id, VISION_MODEL_KEY)
-        db_user.current_model = VISION_MODEL_KEY
+        await update_user_model(db_session, db_user.id, vision_key)
+        db_user.current_model = vision_key
 
     conv = await get_active_conversation(db_session, db_user.id)
     if not conv:
@@ -360,13 +368,13 @@ async def handle_photo(message: Message, db_session: AsyncSession, db_user: User
 
     await message.bot.send_chat_action(message.chat.id, "typing")
     if exited_image_mode and switched_model:
-        status = "📷 Left image mode — switched to <b>Gemini</b>, analyzing photo..."
+        status = f"📷 Left image mode — switched to <b>{vision_cfg.name}</b>, analyzing photo..."
     elif exited_image_mode:
-        status = "📷 Left image mode — analyzing photo with Gemini..."
+        status = f"📷 Left image mode — analyzing photo with <b>{vision_cfg.name}</b>..."
     elif switched_model:
-        status = "📷 Switched to <b>Gemini</b> — analyzing photo..."
+        status = f"📷 Switched to <b>{vision_cfg.name}</b> — analyzing photo..."
     else:
-        status = "📷 Analyzing with Gemini..."
+        status = f"📷 Analyzing with <b>{vision_cfg.name}</b>..."
     reply = await message.answer(status, parse_mode="HTML")
 
     await _reply_streaming(
@@ -375,7 +383,7 @@ async def handle_photo(message: Message, db_session: AsyncSession, db_user: User
         db_session,
         db_user,
         conv.id,
-        VISION_MODEL_KEY,
+        vision_key,
         vision_cfg.name,
         credits_spent,
         _vision_llm.stream_vision(

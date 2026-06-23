@@ -2,7 +2,7 @@ from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
-from config import MODELS, DEFAULT_MODEL
+from config import MODELS, resolve_model_key
 from db.models import User
 from db.repository import update_user_model, create_conversation, clear_waiting_modes
 from bot.keyboards.main import models_keyboard
@@ -15,9 +15,10 @@ async def _show_models(target: Message | CallbackQuery, db_user: User, db_sessio
     db_user.waiting_for_image = False
     db_user.waiting_for_music = False
 
-    if db_user.current_model not in MODELS:
-        db_user.current_model = DEFAULT_MODEL
-        await update_user_model(db_session, db_user.id, DEFAULT_MODEL)
+    resolved = resolve_model_key(db_user.current_model)
+    if resolved != db_user.current_model:
+        db_user.current_model = resolved
+        await update_user_model(db_session, db_user.id, resolved)
 
     text = (
         f"🤖 <b>Choose a Model</b>\n\n"
@@ -47,7 +48,8 @@ async def select_model(callback: CallbackQuery, db_session: AsyncSession, db_use
         await callback.answer("Unknown model.", show_alert=True)
         return
 
-    if model_key == db_user.current_model:
+    current_key = resolve_model_key(db_user.current_model)
+    if model_key == current_key:
         try:
             await callback.answer("This model is already selected ✅")
         except Exception:

@@ -1,7 +1,8 @@
 from typing import Callable, Awaitable, Any
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject, Update
-from db.repository import SessionFactory, get_or_create_user, claim_daily_credits
+from config import resolve_model_key
+from db.repository import SessionFactory, get_or_create_user, claim_daily_credits, update_user_model
 
 
 class UserMiddleware(BaseMiddleware):
@@ -41,6 +42,11 @@ class UserMiddleware(BaseMiddleware):
             if not is_new:
                 await claim_daily_credits(session, tg_user.id)
                 await session.refresh(user)
+
+            resolved_model = resolve_model_key(user.current_model)
+            if resolved_model != user.current_model:
+                user.current_model = resolved_model
+                await update_user_model(session, user.id, resolved_model)
 
             data["db_session"] = session
             data["db_user"] = user

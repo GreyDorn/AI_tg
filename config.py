@@ -18,11 +18,19 @@ class LLMModel:
 
 
 MODELS: Dict[str, LLMModel] = {
-    "gemini-2.0-flash": LLMModel(
+    "gemini-2.5-flash-lite": LLMModel(
         id="gemini-2.5-flash-lite",
+        name="Gemini 2.5 Flash Lite",
+        provider="google",
+        description="Fast & cheap — reads photos in chat",
+        cost_per_message=1,
+        supports_vision=True,
+    ),
+    "gemini-2.5-flash": LLMModel(
+        id="gemini-2.5-flash",
         name="Gemini 2.5 Flash",
         provider="google",
-        description="Fast & smart — reads photos in chat",
+        description="Smarter — reads photos in chat",
         cost_per_message=1,
         supports_vision=True,
     ),
@@ -112,8 +120,19 @@ MODELS: Dict[str, LLMModel] = {
 }
 
 DEFAULT_MODEL = "llama-3.3-70b"
-VISION_MODEL_KEY = "gemini-2.0-flash"
+DEFAULT_VISION_MODEL_KEY = "gemini-2.5-flash-lite"
+MODEL_KEY_ALIASES: Dict[str, str] = {
+    "gemini-2.0-flash": "gemini-2.5-flash-lite",
+}
 DEFAULT_VISION_PROMPT = "What is shown in this image? Describe it in detail."
+
+
+def resolve_model_key(model_key: str) -> str:
+    """Map legacy keys to current model ids."""
+    model_key = MODEL_KEY_ALIASES.get(model_key, model_key)
+    if model_key in MODELS:
+        return model_key
+    return DEFAULT_MODEL
 
 
 @dataclass
