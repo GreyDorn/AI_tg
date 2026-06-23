@@ -93,17 +93,51 @@ MODELS: Dict[str, LLMModel] = {
 
 DEFAULT_MODEL = "llama-3.3-70b"
 
-# Image generation (via OpenRouter + Gemini Image model)
-IMAGE_MODEL_ID = "google/gemini-2.5-flash-image"
-IMAGE_FALLBACK_MODEL_ID = "black-forest-labs/flux.2-klein-4b"
-IMAGE_MAX_TOKENS = 1024
-IMAGE_COST_CREDITS = 3
 
-# Free image generation (Pollinations, no API key required)
-IMAGE_FREE_MODEL = "flux"
-IMAGE_FREE_WIDTH = 1024
-IMAGE_FREE_HEIGHT = 1024
-IMAGE_FREE_COST_CREDITS = 0
+@dataclass
+class ImageModel:
+    id: str
+    name: str
+    provider: str
+    description: str
+    cost_per_image: int
+
+
+IMAGE_MODELS: Dict[str, ImageModel] = {
+    "gemini-image": ImageModel(
+        id="google/gemini-2.5-flash-image",
+        name="Gemini Image",
+        provider="openrouter",
+        description="Google Gemini — high quality",
+        cost_per_image=3,
+    ),
+    "flux-klein": ImageModel(
+        id="black-forest-labs/flux.2-klein-4b",
+        name="Flux Klein",
+        provider="openrouter",
+        description="Fast Flux model by Black Forest Labs",
+        cost_per_image=3,
+    ),
+    "flux-free": ImageModel(
+        id="flux",
+        name="Flux (Free)",
+        provider="pollinations",
+        description="Free generation, good quality",
+        cost_per_image=0,
+    ),
+    "turbo-free": ImageModel(
+        id="turbo",
+        name="Turbo (Free)",
+        provider="pollinations",
+        description="Free and very fast",
+        cost_per_image=0,
+    ),
+}
+
+DEFAULT_IMAGE_MODEL = "flux-free"
+IMAGE_MAX_TOKENS = 1024
+IMAGE_WIDTH = 1024
+IMAGE_HEIGHT = 1024
 
 # Subscription
 SUBSCRIPTION_PRICE_STARS = 299   # price in Telegram Stars

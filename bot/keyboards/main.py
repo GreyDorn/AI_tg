@@ -1,13 +1,13 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from config import MODELS, DEFAULT_MODEL, SUBSCRIPTION_PRICE_STARS, STARS_TOPUP_URL
+from config import MODELS, DEFAULT_MODEL, IMAGE_MODELS, SUBSCRIPTION_PRICE_STARS, STARS_TOPUP_URL
 
 
 def main_menu() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="💬 New Chat"), KeyboardButton(text="🤖 Models")],
-            [KeyboardButton(text="🎨 Create Image"), KeyboardButton(text="🆓 Free Image")],
+            [KeyboardButton(text="🎨 Create Image"), KeyboardButton(text="🖼 Image Models")],
             [KeyboardButton(text="💰 Balance"), KeyboardButton(text="👥 Referral")],
             [KeyboardButton(text="💎 Subscription")],
         ],
@@ -22,6 +22,19 @@ def models_keyboard(current_model: str) -> InlineKeyboardMarkup:
         builder.button(
             text=f"{mark}{model.name}",
             callback_data=f"model:{key}",
+        )
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def image_models_keyboard(current_model: str) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for key, model in IMAGE_MODELS.items():
+        mark = "✅ " if key == current_model else ""
+        cost = "free" if model.cost_per_image == 0 else f"{model.cost_per_image} req"
+        builder.button(
+            text=f"{mark}{model.name} ({cost})",
+            callback_data=f"imagemodel:{key}",
         )
     builder.adjust(1)
     return builder.as_markup()

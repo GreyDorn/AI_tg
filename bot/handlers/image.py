@@ -1,23 +1,23 @@
 import logging
-from collections.abc import Awaitable, Callable
 from aiogram import Router, F
 from aiogram.filters import Command, CommandObject
 from aiogram.types import Message, BufferedInputFile
 from sqlalchemy.ext.asyncio import AsyncSession
-from config import IMAGE_COST_CREDITS, IMAGE_FREE_COST_CREDITS
+from config import IMAGE_MODELS, DEFAULT_IMAGE_MODEL
 from db.models import User
-from db.repository import spend_credits
-from llm.image_gen import generate_image, generate_image_free, ImageGenerationError
+from db.repository import spend_credits, update_user_image_model
+from llm.image_gen import generate_image, ImageGenerationError
+from bot.keyboards.main import image_models_keyboard
 
 router = Router()
 logger = logging.getLogger(__name__)
 
 MENU_BUTTONS = {
     "💬 New Chat", "🤖 Models", "💰 Balance", "👥 Referral", "💎 Subscription",
-    "🎨 Create Image", "🆓 Free Image",
+    "🎨 Create Image", "🖼 Image Models",
 }
 
-_pending_image_mode: dict[int, str] = {}
+_pending_image_users: set[int] = set()
 
 
 def _extension_for_mime(mime_type: str) -> str:
@@ -29,38 +29,40 @@ def _extension_for_mime(mime_type: str) -> str:
 
 
 def _is_waiting_for_image(message: Message) -> bool:
-    return bool(message.from_user and message.from_user.id in _pending_image_mode)
+    return bool(message.from_user and message.from_user.id in _pending_image_users)
 
 
-async def _show_image_help(message: Message, mode: str, waiting: bool = False) -> None:
-    if mode == "free":
-        cost_line = "Бесплатно, без списания запросов"
-        command = "/imagefree кот-космонавт на Луне"
-        title = "🆓 <b>Бесплатная генерация картинок</b>"
-        quality = "Качество ниже, чем у /image, но полностью бесплатно."
-    else:
-        cost_line = f"Стоимость: <b>{IMAGE_COST_CREDITS}</b> запроса"
-        command = "/image кот-космонавт на Луне"
-        title = "🎨 <b>Генерация картинок (HD)</b>"
-        quality = "Лучшее качество через Gemini / Flux."
+def _get_image_model(db_user: User) -> tuple[str, object]:
+    model_key = db_user.current_image_model
+    if model_key not in IMAGE_MODELS:
+        model_key = DEFAULT_IMAGE_MODEL
+    return model_key, IMAGE_MODELS[model_key]
+
+
+async def _show_image_help(message: Message, db_user: User, waiting: bool = False) -> None:
+    model_key, model_cfg = _get_image_model(db_user)
+    cost = (
+        "бесплатно"
+        if model_cfg.cost_per_image == 0
+        else f"{model_cfg.cost_per_image} запроса"
+    )
 
     if waiting:
         text = (
-            f"{title}\n\n"
-            f"Опишите картинку одним сообщением.\n"
+            f"🎨 <b>Опишите картинку одним сообщением</b>\n\n"
+            f"Модель: <b>{model_cfg.name}</b> ({cost})\n"
             f"Например: <code>кот-космонавт на Луне</code>\n\n"
-            f"{cost_line}\n"
-            f"{quality}"
+            f"Сменить модель → /imagemodels"
         )
     else:
         text = (
-            f"{title}\n\n"
+            f"🎨 <b>Генерация картинок</b>\n\n"
+            f"Модель: <b>{model_cfg.name}</b> ({cost})\n\n"
             f"Отправьте команду:\n"
-            f"<code>{command}</code>\n\n"
-            f"{cost_line}\n"
-            f"{quality}"
+            f"<code>/image кот-космонавт на Луне</code>\n\n"
+            f"Сменить модель → /imagemodels"
         )
-    await message.answer(text, parse_mode="HTML")
+    await message.answer(text, parse_mode="HTML", reply_markup=image_models_keyboard(model_key))
 
 
 async def _generate_and_send(
@@ -68,11 +70,14 @@ async def _generate_and_send(
     db_session: AsyncSession,
     db_user: User,
     prompt: str,
-    *,
-    mode: str,
-    cost: int,
-    generator: Callable[[str], Awaitable[tuple[bytes, str]]],
 ) -> None:
+    if db_user.current_image_model not in IMAGE_MODELS:
+        db_user.current_image_model = DEFAULT_IMAGE_MODEL
+        await update_user_image_model(db_session, db_user.id, DEFAULT_IMAGE_MODEL)
+
+    model_key, model_cfg = _get_image_model(db_user)
+    cost = model_cfg.cost_per_image
+
     if len(prompt) > 1000:
         await message.answer("❌ Описание слишком длинное. Максимум 1000 символов.")
         return
@@ -80,42 +85,44 @@ async def _generate_and_send(
     if cost > 0 and db_user.credits < cost and not db_user.has_unlimited_access:
         await message.answer(
             f"❌ <b>Недостаточно запросов</b>\n\n"
-            f"Генерация картинки стоит <b>{cost}</b> запроса.\n"
+            f"Модель <b>{model_cfg.name}</b> стоит <b>{cost}</b> запроса.\n"
             f"У вас: <b>{db_user.credits}</b>\n\n"
-            f"Попробуйте бесплатный вариант → /imagefree\n"
+            f"Выберите бесплатную модель → /imagemodels\n"
             f"Безлимит → /buy",
             parse_mode="HTML",
+            reply_markup=image_models_keyboard(model_key),
         )
         return
 
-    status_text = (
-        "🆓 Рисую бесплатную картинку... Подождите 10–40 сек."
-        if mode == "free"
-        else "🎨 Рисую картинку... Подождите 10–30 сек."
+    status = await message.answer(
+        f"🎨 Рисую через <b>{model_cfg.name}</b>... Подождите 10–40 сек.",
+        parse_mode="HTML",
     )
-    status = await message.answer(status_text)
     await message.bot.send_chat_action(message.chat.id, "upload_photo")
 
     try:
-        image_bytes, mime_type = await generator(prompt)
+        image_bytes, mime_type = await generate_image(prompt, model_key)
     except ImageGenerationError as exc:
-        logger.error("Image generation failed mode=%s user=%s: %s", mode, db_user.id, exc)
+        logger.error("Image generation failed user=%s model=%s: %s", db_user.id, model_key, exc)
         error_text = str(exc)
         if "429" in error_text or "quota" in error_text.lower() or "rate" in error_text.lower():
             user_message = "⏳ Сервис перегружен. Попробуйте через минуту."
         elif "402" in error_text or "insufficient" in error_text.lower() or "credits" in error_text.lower():
-            user_message = "💳 Платный сервис картинок временно недоступен. Попробуйте /imagefree."
+            user_message = (
+                f"💳 Модель <b>{model_cfg.name}</b> временно недоступна.\n\n"
+                f"Выберите бесплатную модель → /imagemodels"
+            )
         elif "text instead of image" in error_text.lower():
             user_message = (
                 "⚠️ Модель вернула текст вместо картинки.\n"
-                "Попробуйте переформулировать описание или повторите запрос."
+                "Попробуйте переформулировать описание."
             )
         else:
-            user_message = "⚠️ Не удалось создать картинку. Попробуйте другое описание."
-        await status.edit_text(user_message)
+            user_message = "⚠️ Не удалось создать картинку. Попробуйте другую модель → /imagemodels"
+        await status.edit_text(user_message, parse_mode="HTML", reply_markup=image_models_keyboard(model_key))
         return
     except Exception:
-        logger.exception("Unexpected image generation error mode=%s user=%s", mode, db_user.id)
+        logger.exception("Unexpected image generation error user=%s model=%s", db_user.id, model_key)
         await status.edit_text("⚠️ Не удалось создать картинку. Попробуйте позже.")
         return
 
@@ -126,8 +133,7 @@ async def _generate_and_send(
             return
 
     ext = _extension_for_mime(mime_type)
-    prefix = "🆓" if mode == "free" else "🎨"
-    caption = f"{prefix} {prompt[:900]}"
+    caption = f"🎨 {model_cfg.name}\n{prompt[:850]}"
 
     try:
         await status.delete()
@@ -140,14 +146,6 @@ async def _generate_and_send(
     )
 
 
-def _set_image_mode(message: Message, mode: str, prompt: str) -> None:
-    user_id = message.from_user.id
-    if prompt:
-        _pending_image_mode.pop(user_id, None)
-    else:
-        _pending_image_mode[user_id] = mode
-
-
 @router.message(Command("image"))
 async def cmd_image(
     message: Message,
@@ -156,32 +154,12 @@ async def cmd_image(
     db_user: User,
 ) -> None:
     prompt = (command.args or "").strip()
-    _set_image_mode(message, "premium", prompt)
     if not prompt:
-        await _show_image_help(message, mode="premium", waiting=True)
+        _pending_image_users.add(message.from_user.id)
+        await _show_image_help(message, db_user, waiting=True)
         return
-    await _generate_and_send(
-        message, db_session, db_user, prompt,
-        mode="premium", cost=IMAGE_COST_CREDITS, generator=generate_image,
-    )
-
-
-@router.message(Command("imagefree"))
-async def cmd_image_free(
-    message: Message,
-    command: CommandObject,
-    db_session: AsyncSession,
-    db_user: User,
-) -> None:
-    prompt = (command.args or "").strip()
-    _set_image_mode(message, "free", prompt)
-    if not prompt:
-        await _show_image_help(message, mode="free", waiting=True)
-        return
-    await _generate_and_send(
-        message, db_session, db_user, prompt,
-        mode="free", cost=IMAGE_FREE_COST_CREDITS, generator=generate_image_free,
-    )
+    _pending_image_users.discard(message.from_user.id)
+    await _generate_and_send(message, db_session, db_user, prompt)
 
 
 @router.message(F.text == "🎨 Create Image")
@@ -190,18 +168,8 @@ async def btn_image(
     db_session: AsyncSession,
     db_user: User,
 ) -> None:
-    _pending_image_mode[message.from_user.id] = "premium"
-    await _show_image_help(message, mode="premium", waiting=True)
-
-
-@router.message(F.text == "🆓 Free Image")
-async def btn_image_free(
-    message: Message,
-    db_session: AsyncSession,
-    db_user: User,
-) -> None:
-    _pending_image_mode[message.from_user.id] = "free"
-    await _show_image_help(message, mode="free", waiting=True)
+    _pending_image_users.add(message.from_user.id)
+    await _show_image_help(message, db_user, waiting=True)
 
 
 @router.message(F.text, _is_waiting_for_image)
@@ -211,18 +179,8 @@ async def image_prompt_followup(
     db_user: User,
 ) -> None:
     if not message.text or message.text.startswith("/") or message.text in MENU_BUTTONS:
-        _pending_image_mode.pop(message.from_user.id, None)
+        _pending_image_users.discard(message.from_user.id)
         return
 
-    mode = _pending_image_mode.pop(message.from_user.id, "premium")
-    prompt = message.text.strip()
-    if mode == "free":
-        await _generate_and_send(
-            message, db_session, db_user, prompt,
-            mode="free", cost=IMAGE_FREE_COST_CREDITS, generator=generate_image_free,
-        )
-    else:
-        await _generate_and_send(
-            message, db_session, db_user, prompt,
-            mode="premium", cost=IMAGE_COST_CREDITS, generator=generate_image,
-        )
+    _pending_image_users.discard(message.from_user.id)
+    await _generate_and_send(message, db_session, db_user, message.text.strip())

@@ -2,7 +2,7 @@ from aiogram import Router
 from aiogram.filters import CommandStart, Command
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
-from config import FREE_CREDITS_ON_START, DAILY_FREE_CREDITS, REFERRAL_BONUS_CREDITS, SUBSCRIPTION_PRICE_STARS, IMAGE_COST_CREDITS, MODELS
+from config import FREE_CREDITS_ON_START, DAILY_FREE_CREDITS, REFERRAL_BONUS_CREDITS, SUBSCRIPTION_PRICE_STARS, IMAGE_MODELS, MODELS
 from db.models import User
 from db.repository import create_conversation
 from bot.keyboards.main import main_menu
@@ -36,25 +36,29 @@ async def cmd_help(message: Message) -> None:
         f"• <b>{m.name}</b> — {m.description}"
         for m in MODELS.values()
     )
+    image_models_text = "\n".join(
+        f"• <b>{m.name}</b> — {m.description}"
+        + (f" ({m.cost_per_image} req)" if m.cost_per_image else " (free)")
+        for m in IMAGE_MODELS.values()
+    )
     await message.answer(
         f"<b>📚 Help</b>\n\n"
         f"<b>Commands:</b>\n"
         f"/start — main menu\n"
         f"/newchat — start a new conversation\n"
-        f"/models — choose a model\n"
-        f"/image — create an HD image (AI, {IMAGE_COST_CREDITS} requests)\n"
-        f"/imagefree — create a free image (0 requests)\n"
+        f"/models — choose a text model\n"
+        f"/image — create an image\n"
+        f"/imagemodels — choose image model\n"
         f"/balance — your request balance\n"
         f"/buy — unlimited subscription\n"
         f"/referral — referral program\n"
         f"/help — this help message\n\n"
-        f"<b>Available models:</b>\n{models_text}\n\n"
+        f"<b>Text models:</b>\n{models_text}\n\n"
+        f"<b>Image models:</b>\n{image_models_text}\n\n"
         f"<b>Free requests:</b>\n"
         f"• {FREE_CREDITS_ON_START} requests on registration\n"
         f"• +{DAILY_FREE_CREDITS} every day\n"
         f"• +{REFERRAL_BONUS_CREDITS} for each referred friend\n\n"
-        f"🎨 <b>HD image</b> — /image (costs {IMAGE_COST_CREDITS} requests)\n"
-        f"🆓 <b>Free image</b> — /imagefree (0 requests)\n"
         f"💎 <b>Unlimited subscription</b> — {SUBSCRIPTION_PRICE_STARS} ⭐/month",
         parse_mode="HTML",
     )
