@@ -7,7 +7,7 @@ from aiogram.types import (
 )
 from aiogram.exceptions import TelegramAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
-from config import SUBSCRIPTION_PRICE_STARS, SUBSCRIPTION_DAYS, PREMIUM_BOT_STARS_URL
+from config import SUBSCRIPTION_PRICE_STARS, SUBSCRIPTION_DAYS, PREMIUM_BOT_STARS_URL, RATE_LIMIT_MESSAGES, RATE_LIMIT_WINDOW
 from db.models import User
 from db.repository import process_subscription_payment
 from bot.keyboards.main import subscription_keyboard
@@ -40,9 +40,14 @@ async def cmd_buy(message: Message, db_user: User) -> None:
 
     await message.answer(
         f"💎 <b>Unlimited Subscription</b>\n\n"
-        f"• Unlimited requests to all models\n"
-        f"• All models, no restrictions\n"
+        f"<b>What's included:</b>\n"
+        f"• Unlimited text requests to <b>all LLM models</b>\n"
+        f"• Unlimited image generation with <b>all image models</b>\n"
+        f"  (Gemini Image, Flux Klein, Flux, Turbo)\n"
         f"• {SUBSCRIPTION_DAYS} days of access{sub_status}\n\n"
+        f"<b>Fair-use limit:</b>\n"
+        f"• Up to <b>{RATE_LIMIT_MESSAGES} messages per {RATE_LIMIT_WINDOW} sec.</b> "
+        f"(anti-spam protection for everyone)\n\n"
         f"Price: <b>{SUBSCRIPTION_PRICE_STARS} ⭐ Stars per month</b>\n\n"
         f"ℹ️ Need stars? Tap <b>Buy Stars</b> below — the purchase window "
         f"opens right here (via PremiumBot), without leaving the chat.\n"
@@ -61,7 +66,10 @@ async def process_subscribe_callback(callback: CallbackQuery) -> None:
     try:
         await callback.message.answer_invoice(
             title="Unlimited Subscription — 30 days",
-            description=f"Unlimited requests to all AI models for {SUBSCRIPTION_DAYS} days",
+            description=(
+                f"Unlimited text + image requests to all models for {SUBSCRIPTION_DAYS} days. "
+                f"Fair-use: {RATE_LIMIT_MESSAGES} messages per {RATE_LIMIT_WINDOW} sec."
+            ),
             payload=_subscription_payload(user_id),
             currency="XTR",
             prices=[
@@ -156,7 +164,8 @@ async def successful_payment(
 
     await message.answer(
         f"✅ <b>Subscription activated!</b>\n\n"
-        f"Unlimited access to all models until <b>{until_text}</b> 🎉",
+        f"Unlimited access to all text and image models until "
+        f"<b>{until_text}</b> 🎉",
         parse_mode="HTML",
     )
 

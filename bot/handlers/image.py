@@ -3,13 +3,21 @@ from aiogram import Router, F
 from aiogram.filters import Command, CommandObject
 from aiogram.types import Message, BufferedInputFile
 from sqlalchemy.ext.asyncio import AsyncSession
-from config import IMAGE_COST_CREDITS
+from config import IMAGE_MODELS, DEFAULT_IMAGE_MODEL
 from db.models import User
-from db.repository import spend_credits
+from db.repository import spend_credits, update_user_image_model
 from llm.image_gen import generate_image, ImageGenerationError
+from bot.keyboards.main import image_models_keyboard
 
 router = Router()
 logger = logging.getLogger(__name__)
+
+MENU_BUTTONS = {
+    "💬 New Chat", "🤖 Models", "💰 Balance", "👥 Referral", "💎 Subscription",
+    "🎨 Create Image", "🖼 Image Models",
+}
+
+_pending_image_users: set[int] = set()
 
 
 def _extension_for_mime(mime_type: str) -> str:
@@ -20,14 +28,45 @@ def _extension_for_mime(mime_type: str) -> str:
     }.get(mime_type, "png")
 
 
-async def _show_image_help(message: Message) -> None:
-    await message.answer(
-        "🎨 <b>Image generation</b>\n\n"
-        "Describe what you want to create:\n"
-        "<code>/image a cat astronaut on the Moon</code>\n\n"
-        f"Cost: <b>{IMAGE_COST_CREDITS}</b> requests per image",
-        parse_mode="HTML",
-    )
+def _is_waiting_for_image(message: Message) -> bool:
+    return bool(message.from_user and message.from_user.id in _pending_image_users)
+
+
+def _format_cost(cost: int) -> str:
+    if cost == 0:
+        return "free"
+    if cost == 1:
+        return "1 request"
+    return f"{cost} requests"
+
+
+def _get_image_model(db_user: User) -> tuple[str, object]:
+    model_key = db_user.current_image_model
+    if model_key not in IMAGE_MODELS:
+        model_key = DEFAULT_IMAGE_MODEL
+    return model_key, IMAGE_MODELS[model_key]
+
+
+async def _show_image_help(message: Message, db_user: User, waiting: bool = False) -> None:
+    model_key, model_cfg = _get_image_model(db_user)
+    cost = _format_cost(model_cfg.cost_per_image)
+
+    if waiting:
+        text = (
+            f"🎨 <b>Describe your image in one message</b>\n\n"
+            f"Model: <b>{model_cfg.name}</b> ({cost})\n"
+            f"Example: <code>astronaut cat on the Moon</code>\n\n"
+            f"Change model → /imagemodels"
+        )
+    else:
+        text = (
+            f"🎨 <b>Image Generation</b>\n\n"
+            f"Model: <b>{model_cfg.name}</b> ({cost})\n\n"
+            f"Send a command:\n"
+            f"<code>/image astronaut cat on the Moon</code>\n\n"
+            f"Change model → /imagemodels"
+        )
+    await message.answer(text, parse_mode="HTML", reply_markup=image_models_keyboard(model_key))
 
 
 async def _generate_and_send(
@@ -36,49 +75,69 @@ async def _generate_and_send(
     db_user: User,
     prompt: str,
 ) -> None:
+    if db_user.current_image_model not in IMAGE_MODELS:
+        db_user.current_image_model = DEFAULT_IMAGE_MODEL
+        await update_user_image_model(db_session, db_user.id, DEFAULT_IMAGE_MODEL)
+
+    model_key, model_cfg = _get_image_model(db_user)
+    cost = model_cfg.cost_per_image
+
     if len(prompt) > 1000:
-        await message.answer("❌ Description is too long. Please use up to 1000 characters.")
+        await message.answer("❌ Description is too long. Maximum 1000 characters.")
         return
 
-    if db_user.credits < IMAGE_COST_CREDITS and not db_user.has_unlimited_access:
+    if cost > 0 and db_user.credits < cost and not db_user.has_unlimited_access:
         await message.answer(
             f"❌ <b>Not enough requests</b>\n\n"
-            f"Image generation costs <b>{IMAGE_COST_CREDITS}</b> requests.\n"
+            f"<b>{model_cfg.name}</b> costs <b>{cost}</b> requests.\n"
             f"You have: <b>{db_user.credits}</b>\n\n"
-            f"Get unlimited access → /buy",
+            f"Try a free model → /imagemodels\n"
+            f"Unlimited access → /buy",
             parse_mode="HTML",
+            reply_markup=image_models_keyboard(model_key),
         )
         return
 
-    status = await message.answer("🎨 Generating image... Please wait ~10–30 sec.")
+    status = await message.answer(
+        f"🎨 Drawing with <b>{model_cfg.name}</b>... Please wait 10–40 sec.",
+        parse_mode="HTML",
+    )
     await message.bot.send_chat_action(message.chat.id, "upload_photo")
 
     try:
-        image_bytes, mime_type = await generate_image(prompt)
+        image_bytes, mime_type = await generate_image(prompt, model_key)
     except ImageGenerationError as exc:
-        logger.error("Image generation failed for user %s: %s", db_user.id, exc)
+        logger.error("Image generation failed user=%s model=%s: %s", db_user.id, model_key, exc)
         error_text = str(exc)
         if "429" in error_text or "quota" in error_text.lower() or "rate" in error_text.lower():
-            user_message = "⏳ Image service is overloaded. Try again in a minute."
-        elif "402" in error_text or "insufficient" in error_text.lower():
-            user_message = "💳 Image service is temporarily unavailable."
+            user_message = "⏳ Service is busy. Please try again in a minute."
+        elif "402" in error_text or "insufficient" in error_text.lower() or "credits" in error_text.lower():
+            user_message = (
+                f"💳 <b>{model_cfg.name}</b> is temporarily unavailable.\n\n"
+                f"Try a free model → /imagemodels"
+            )
+        elif "text instead of image" in error_text.lower():
+            user_message = (
+                "⚠️ The model returned text instead of an image.\n"
+                "Try rephrasing your description."
+            )
         else:
-            user_message = "⚠️ Could not generate the image. Try a different description."
-        await status.edit_text(user_message)
+            user_message = "⚠️ Could not create the image. Try another model → /imagemodels"
+        await status.edit_text(user_message, parse_mode="HTML", reply_markup=image_models_keyboard(model_key))
         return
     except Exception:
-        logger.exception("Unexpected image generation error for user %s", db_user.id)
-        await status.edit_text("⚠️ Could not generate the image. Try again later.")
+        logger.exception("Unexpected image generation error user=%s model=%s", db_user.id, model_key)
+        await status.edit_text("⚠️ Could not create the image. Please try again later.")
         return
 
-    if not db_user.has_unlimited_access:
-        spent = await spend_credits(db_session, db_user.id, IMAGE_COST_CREDITS)
+    if cost > 0 and not db_user.has_unlimited_access:
+        spent = await spend_credits(db_session, db_user.id, cost)
         if not spent:
-            await status.edit_text("❌ Not enough requests to complete the operation.")
+            await status.edit_text("❌ Not enough requests to complete this action.")
             return
 
     ext = _extension_for_mime(mime_type)
-    caption = f"🎨 {prompt[:900]}"
+    caption = f"🎨 {model_cfg.name}\n{prompt[:850]}"
 
     try:
         await status.delete()
@@ -100,8 +159,10 @@ async def cmd_image(
 ) -> None:
     prompt = (command.args or "").strip()
     if not prompt:
-        await _show_image_help(message)
+        _pending_image_users.add(message.from_user.id)
+        await _show_image_help(message, db_user, waiting=True)
         return
+    _pending_image_users.discard(message.from_user.id)
     await _generate_and_send(message, db_session, db_user, prompt)
 
 
@@ -111,4 +172,19 @@ async def btn_image(
     db_session: AsyncSession,
     db_user: User,
 ) -> None:
-    await _show_image_help(message)
+    _pending_image_users.add(message.from_user.id)
+    await _show_image_help(message, db_user, waiting=True)
+
+
+@router.message(F.text, _is_waiting_for_image)
+async def image_prompt_followup(
+    message: Message,
+    db_session: AsyncSession,
+    db_user: User,
+) -> None:
+    if not message.text or message.text.startswith("/") or message.text in MENU_BUTTONS:
+        _pending_image_users.discard(message.from_user.id)
+        return
+
+    _pending_image_users.discard(message.from_user.id)
+    await _generate_and_send(message, db_session, db_user, message.text.strip())

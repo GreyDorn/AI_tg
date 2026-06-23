@@ -36,7 +36,7 @@ async def cmd_balance(message: Message, db_session: AsyncSession, db_user: User)
             f"<b>Get free requests:</b>\n"
             f"• +{DAILY_FREE_CREDITS} every day (come back daily!)\n"
             f"• +{REFERRAL_BONUS_CREDITS} for each referred friend (/referral)\n\n"
-            f"💎 <b>Unlimited subscription</b> — {SUBSCRIPTION_PRICE_STARS} ⭐/month → /buy",
+            f"💎 <b>Unlimited subscription</b> — {SUBSCRIPTION_PRICE_STARS} ⭐ per month → /buy",
             parse_mode="HTML",
         )
 

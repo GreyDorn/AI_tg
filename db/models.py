@@ -17,6 +17,7 @@ class User(Base):
     is_unlimited: Mapped[bool] = mapped_column(Boolean, default=False)
     subscription_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     current_model: Mapped[str] = mapped_column(String(64), default="llama-3.3-70b")
+    current_image_model: Mapped[str] = mapped_column(String(64), default="flux-free")
     referred_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"))
     daily_credits_claimed_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
