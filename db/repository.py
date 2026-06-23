@@ -103,6 +103,18 @@ async def set_waiting_for_music(session: AsyncSession, user_id: int, waiting: bo
         await session.commit()
 
 
+async def clear_waiting_modes(session: AsyncSession, user_id: int) -> None:
+    """Exit image/music prompt modes (back to normal text chat)."""
+    user = await session.get(User, user_id)
+    if not user:
+        return
+    if not user.waiting_for_image and not user.waiting_for_music:
+        return
+    user.waiting_for_image = False
+    user.waiting_for_music = False
+    await session.commit()
+
+
 async def spend_credits(session: AsyncSession, user_id: int, amount: int) -> bool:
     """Списывает кредиты. Возвращает False если недостаточно."""
     user = await session.get(User, user_id)

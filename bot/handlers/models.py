@@ -4,13 +4,17 @@ from aiogram.types import Message, CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 from config import MODELS, DEFAULT_MODEL
 from db.models import User
-from db.repository import update_user_model, create_conversation
+from db.repository import update_user_model, create_conversation, clear_waiting_modes
 from bot.keyboards.main import models_keyboard
 
 router = Router()
 
 
 async def _show_models(target: Message | CallbackQuery, db_user: User, db_session: AsyncSession) -> None:
+    await clear_waiting_modes(db_session, db_user.id)
+    db_user.waiting_for_image = False
+    db_user.waiting_for_music = False
+
     if db_user.current_model not in MODELS:
         db_user.current_model = DEFAULT_MODEL
         await update_user_model(db_session, db_user.id, DEFAULT_MODEL)
@@ -48,6 +52,7 @@ async def select_model(callback: CallbackQuery, db_session: AsyncSession, db_use
             await callback.answer("This model is already selected ✅")
         except Exception:
             pass
+        await _show_models(callback, db_user, db_session)
         return
 
     await update_user_model(db_session, db_user.id, model_key)

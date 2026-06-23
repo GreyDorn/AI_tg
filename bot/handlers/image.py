@@ -257,14 +257,10 @@ async def image_intent_message(
     await _generate_and_send(message, db_session, db_user, prompt)
 
 
-@router.message(F.text, WaitingForImageFilter())
+@router.message(F.text & ~F.text.startswith("/") & ~F.text.in_(MENU_BUTTONS), WaitingForImageFilter())
 async def image_prompt_followup(
     message: Message,
     db_session: AsyncSession,
     db_user: User,
 ) -> None:
-    if not message.text or message.text.startswith("/") or message.text in MENU_BUTTONS:
-        await _set_waiting(db_session, db_user, False)
-        return
-
     await _generate_and_send(message, db_session, db_user, message.text.strip())
