@@ -84,14 +84,32 @@ def _photo_user_content(caption: str | None) -> str:
     return f"[📷 Image] {caption}" if caption else "[📷 Image]"
 
 
-def _is_gemini_busy(error_str: str) -> bool:
-    low = error_str.lower()
-    return (
-        "503" in error_str
-        or "unavailable" in low
-        or "overloaded" in low
-        or "high demand" in low
-    )
+VISION_ERROR_MESSAGE = (
+    "⚠️ <b>Could not analyze the photo</b>\n\n"
+    "Try again later. For text chat, choose a non-Gemini model in 🤖 <b>Models</b>."
+)
+
+
+async def _revert_auto_switched_model(
+    db_session: AsyncSession,
+    db_user: User,
+    previous_model_key: str | None,
+) -> None:
+    if not previous_model_key or db_user.current_model == previous_model_key:
+        return
+    await update_user_model(db_session, db_user.id, previous_model_key)
+    db_user.current_model = previous_model_key
+
+
+async def _reply_photo_failed(
+    reply: Message,
+    db_session: AsyncSession,
+    db_user: User,
+    *,
+    previous_model_key: str | None = None,
+) -> None:
+    await _revert_auto_switched_model(db_session, db_user, previous_model_key)
+    await reply.edit_text(VISION_ERROR_MESSAGE, parse_mode="HTML")
 
 
 def _is_rate_limited(error_str: str) -> bool:
@@ -101,15 +119,6 @@ def _is_rate_limited(error_str: str) -> bool:
         or "quota" in low
         or "rate" in low
         or "resource_exhausted" in low
-    )
-
-
-async def _reply_vision_unavailable(reply: Message) -> None:
-    await reply.edit_text(
-        "⏳ <b>Gemini is temporarily unavailable</b>\n\n"
-        "Photo analysis uses <b>Gemini</b> only — other models cannot read images.\n\n"
-        "The service is busy right now. Please try again in a minute.",
-        parse_mode="HTML",
     )
 
 
@@ -125,6 +134,7 @@ async def _reply_streaming(
     stream,
     *,
     vision_mode: bool = False,
+    revert_model_key: str | None = None,
 ) -> None:
     full_response = ""
     last_edit_time = asyncio.get_event_loop().time()
@@ -144,7 +154,12 @@ async def _reply_streaming(
         if not full_response:
             if credits_spent:
                 await add_credits(db_session, db_user.id, credits_spent)
-            await reply.edit_text("⚠️ The model returned an empty response.")
+            if vision_mode:
+                await _reply_photo_failed(
+                    reply, db_session, db_user, previous_model_key=revert_model_key,
+                )
+            else:
+                await reply.edit_text("⚠️ The model returned an empty response.")
             return
 
         parts = _split_text(full_response)
@@ -158,36 +173,33 @@ async def _reply_streaming(
         error_str = str(e)
         logger.error("LLM error for user %s model %s: %s", db_user.id, model_key, error_str)
 
-        if _is_rate_limited(error_str):
-            if vision_mode:
+        if vision_mode:
+            if VISION_UNAVAILABLE_MSG in error_str or "gemini api" in error_str.lower():
                 await reply.edit_text(
-                    "⏳ <b>Gemini limit reached</b>\n\n"
-                    "Photo analysis uses <b>Gemini</b> only — other models cannot read images.\n\n"
-                    "The free quota is exhausted for now. Try again later, "
-                    "or use text chat with another model via 🤖 <b>Models</b>.",
+                    "📷 <b>Photo analysis is not available</b>\n\n"
+                    "Gemini API is not configured on this bot.",
                     parse_mode="HTML",
                 )
             else:
-                await reply.edit_text(
-                    f"⏳ <b>Model is overloaded</b>\n\n"
-                    f"<b>{model_name}</b> has reached its request limit.\n\n"
-                    f"Choose another model 👇",
-                    parse_mode="HTML",
-                    reply_markup=models_keyboard(model_key),
+                await _reply_photo_failed(
+                    reply, db_session, db_user, previous_model_key=revert_model_key,
                 )
-        elif vision_mode and _is_gemini_busy(error_str):
-            await _reply_vision_unavailable(reply)
+        elif _is_rate_limited(error_str):
+            await reply.edit_text(
+                f"⏳ <b>Model is overloaded</b>\n\n"
+                f"<b>{model_name}</b> has reached its request limit.\n\n"
+                f"Choose another model 👇",
+                parse_mode="HTML",
+                reply_markup=models_keyboard(model_key),
+            )
         elif "402" in error_str or "insufficient balance" in error_str.lower() or "payment required" in error_str.lower():
-            if vision_mode:
-                await _reply_vision_unavailable(reply)
-            else:
-                await reply.edit_text(
-                    f"💳 <b>Model temporarily unavailable</b>\n\n"
-                    f"<b>{model_name}</b> is not available right now due to provider limits.\n\n"
-                    f"Choose another model 👇",
-                    parse_mode="HTML",
-                    reply_markup=models_keyboard(model_key),
-                )
+            await reply.edit_text(
+                f"💳 <b>Model temporarily unavailable</b>\n\n"
+                f"<b>{model_name}</b> is not available right now due to provider limits.\n\n"
+                f"Choose another model 👇",
+                parse_mode="HTML",
+                reply_markup=models_keyboard(model_key),
+            )
         elif "decommissioned" in error_str or "not supported" in error_str:
             await reply.edit_text(
                 f"❌ <b>Model unavailable</b>\n\n"
@@ -203,26 +215,13 @@ async def _reply_streaming(
                 f"this will clear the history so you can continue.",
                 parse_mode="HTML",
             )
-        elif VISION_UNAVAILABLE_MSG in error_str or "gemini api" in error_str.lower():
-            await reply.edit_text(
-                "📷 <b>Photo analysis is not available</b>\n\n"
-                "Gemini API is not configured on this bot.",
-                parse_mode="HTML",
-            )
         else:
-            if vision_mode:
-                await reply.edit_text(
-                    "⚠️ <b>Could not analyze the photo</b>\n\n"
-                    "Please try again in a minute.",
-                    parse_mode="HTML",
-                )
-            else:
-                await reply.edit_text(
-                    f"⚠️ <b>Model error</b>\n\n"
-                    f"Try again or choose a different model 👇",
-                    parse_mode="HTML",
-                    reply_markup=models_keyboard(model_key),
-                )
+            await reply.edit_text(
+                f"⚠️ <b>Model error</b>\n\n"
+                f"Try again or choose a different model 👇",
+                parse_mode="HTML",
+                reply_markup=models_keyboard(model_key),
+            )
         return
 
     await add_message(db_session, conv_id, "assistant", full_response)
@@ -324,8 +323,10 @@ async def handle_photo(message: Message, db_session: AsyncSession, db_user: User
     if not await _ensure_credits(message, db_user, vision_cfg.cost_per_message):
         return
 
-    switched_model = resolve_model_key(db_user.current_model) != vision_key
-    if switched_model:
+    previous_model_key = resolve_model_key(db_user.current_model)
+    auto_switched = previous_model_key != vision_key
+    revert_model_key = previous_model_key if auto_switched else None
+    if auto_switched:
         await update_user_model(db_session, db_user.id, vision_key)
         db_user.current_model = vision_key
 
@@ -344,6 +345,7 @@ async def handle_photo(message: Message, db_session: AsyncSession, db_user: User
         if await spend_credits(db_session, db_user.id, vision_cfg.cost_per_message):
             credits_spent = vision_cfg.cost_per_message
         else:
+            await _revert_auto_switched_model(db_session, db_user, revert_model_key)
             await message.answer(
                 f"❌ <b>Out of requests</b>\n\n"
                 f"You have: <b>{db_user.credits}</b>\n\n"
@@ -356,10 +358,12 @@ async def handle_photo(message: Message, db_session: AsyncSession, db_user: User
     try:
         image_bytes, mime_type = await _download_photo_bytes(message)
     except ValueError as exc:
+        await _revert_auto_switched_model(db_session, db_user, revert_model_key)
         await message.answer(f"❌ {exc}")
         return
     except Exception:
         logger.exception("Failed to download photo user=%s", db_user.id)
+        await _revert_auto_switched_model(db_session, db_user, revert_model_key)
         await message.answer("⚠️ Could not download the image. Please try again.")
         return
 
@@ -367,11 +371,11 @@ async def handle_photo(message: Message, db_session: AsyncSession, db_user: User
     logger.info("Photo analysis user=%s prompt=%r size=%d", db_user.id, prompt[:120], len(image_bytes))
 
     await message.bot.send_chat_action(message.chat.id, "typing")
-    if exited_image_mode and switched_model:
+    if exited_image_mode and auto_switched:
         status = f"📷 Left image mode — switched to <b>{vision_cfg.name}</b>, analyzing photo..."
     elif exited_image_mode:
         status = f"📷 Left image mode — analyzing photo with <b>{vision_cfg.name}</b>..."
-    elif switched_model:
+    elif auto_switched:
         status = f"📷 Switched to <b>{vision_cfg.name}</b> — analyzing photo..."
     else:
         status = f"📷 Analyzing with <b>{vision_cfg.name}</b>..."
@@ -394,4 +398,5 @@ async def handle_photo(message: Message, db_session: AsyncSession, db_user: User
             vision_cfg.id,
         ),
         vision_mode=True,
+        revert_model_key=revert_model_key,
     )
