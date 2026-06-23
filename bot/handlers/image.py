@@ -1,4 +1,5 @@
 import logging
+import re
 from aiogram import Router, F
 from aiogram.filters import Command, CommandObject, BaseFilter
 from aiogram.types import Message, BufferedInputFile, CallbackQuery
@@ -18,10 +19,37 @@ MENU_BUTTONS = {
     "🎨 Create Image", "🖼 Image Models", "🎵 Create Music", "🎵 Music Models",
 }
 
+_IMAGE_INTENT = re.compile(
+    r"^(?:"
+    r"нарисуй(?:те)?|нарисовать|"
+    r"draw|paint|sketch|"
+    r"create (?:an? )?(?:image|picture|photo)|"
+    r"generate (?:an? )?(?:image|picture)|"
+    r"создай(?:те)? (?:картинку|изображение|фото|рисунок)|"
+    r"сгенерируй(?:те)? (?:картинку|изображение|фото)"
+    r")\s+(.+)",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _extract_image_intent_prompt(text: str) -> str | None:
+    match = _IMAGE_INTENT.match(text.strip())
+    if not match:
+        return None
+    return match.group(1).strip()
+
 
 class WaitingForImageFilter(BaseFilter):
     async def __call__(self, message: Message, db_user: User) -> bool:
         return db_user.waiting_for_image
+
+
+class ImageIntentFilter(BaseFilter):
+    async def __call__(self, message: Message) -> bool:
+        text = message.text or ""
+        if not text or text.startswith("/") or text in MENU_BUTTONS:
+            return False
+        return _extract_image_intent_prompt(text) is not None
 
 
 def _extension_for_mime(mime_type: str) -> str:
@@ -93,6 +121,13 @@ async def _generate_and_send(
         db_user.current_image_model = model_key
         await update_user_image_model(db_session, db_user.id, model_key)
     cost = model_cfg.cost_per_image
+
+    logger.info(
+        "Image request user=%s model=%s prompt=%r",
+        db_user.id,
+        model_key,
+        prompt[:120],
+    )
 
     if len(prompt) > 1000:
         await message.answer("❌ Description is too long. Maximum 1000 characters.")
@@ -206,6 +241,19 @@ async def btn_image(
 ) -> None:
     await _set_waiting(db_session, db_user, True)
     await _show_image_help(message, db_user, waiting=True)
+
+
+@router.message(F.text, ImageIntentFilter())
+async def image_intent_message(
+    message: Message,
+    db_session: AsyncSession,
+    db_user: User,
+) -> None:
+    prompt = _extract_image_intent_prompt(message.text or "")
+    if not prompt:
+        return
+    await _set_waiting(db_session, db_user, False)
+    await _generate_and_send(message, db_session, db_user, prompt)
 
 
 @router.message(F.text, WaitingForImageFilter())

@@ -4,7 +4,7 @@ from aiogram.types import Message, CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 from config import IMAGE_MODELS, DEFAULT_IMAGE_MODEL
 from db.models import User
-from db.repository import update_user_image_model
+from db.repository import update_user_image_model, set_waiting_for_image
 from bot.keyboards.main import image_models_keyboard
 from llm.provider_status import get_available_image_models, resolve_image_model_key
 
@@ -34,7 +34,8 @@ async def _show_image_models(target: Message | CallbackQuery, db_user: User, db_
     text = (
         f"🖼 <b>Image Models</b>\n\n"
         f"Current: <b>{current.name}</b> ({_format_cost(current.cost_per_image)})\n\n"
-        f"Pick a model, then send /image or tap 🎨 Create Image."
+        f"Pick a model, then describe your image below 👇\n"
+        f"Or send: <code>/image your description</code>"
         f"{hidden_note}"
     )
     markup = image_models_keyboard(model_key)
@@ -69,9 +70,17 @@ async def select_image_model(callback: CallbackQuery, db_session: AsyncSession, 
 
     await update_user_image_model(db_session, db_user.id, model_key)
     db_user.current_image_model = model_key
+    await set_waiting_for_image(db_session, db_user.id, True)
+    db_user.waiting_for_image = True
 
     try:
-        await callback.answer(f"✅ {IMAGE_MODELS[model_key].name}")
+        await callback.answer(f"✅ {IMAGE_MODELS[model_key].name} — now describe your image")
     except Exception:
         pass
     await _show_image_models(callback, db_user, db_session)
+    hint = (
+        f"🎨 <b>Model selected: {IMAGE_MODELS[model_key].name}</b>\n\n"
+        f"Describe your image in the <b>next message</b>.\n"
+        f"Example: <code>astronaut cat on the Moon</code>"
+    )
+    await callback.message.answer(hint, parse_mode="HTML")

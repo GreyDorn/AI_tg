@@ -208,8 +208,8 @@ async def _generate_pollinations(model_id: str, prompt: str) -> tuple[bytes, str
     errors: list[str] = []
 
     for attempt_name, generator in (
-        ("gen", _generate_pollinations_gen),
         ("legacy", _generate_pollinations_legacy),
+        ("gen", _generate_pollinations_gen),
     ):
         try:
             result = await generator(model_id, prompt)
