@@ -18,6 +18,7 @@ async def init_db() -> None:
             "ALTER TABLE users ADD COLUMN is_unlimited INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE users ADD COLUMN subscription_until DATETIME",
             "ALTER TABLE users ADD COLUMN current_image_model VARCHAR(64) NOT NULL DEFAULT 'flux-free'",
+            "ALTER TABLE users ADD COLUMN waiting_for_image INTEGER NOT NULL DEFAULT 0",
         ]:
             try:
                 await conn.execute(text(column_sql))
@@ -72,6 +73,13 @@ async def update_user_image_model(session: AsyncSession, user_id: int, model_key
     user = await session.get(User, user_id)
     if user:
         user.current_image_model = model_key
+        await session.commit()
+
+
+async def set_waiting_for_image(session: AsyncSession, user_id: int, waiting: bool) -> None:
+    user = await session.get(User, user_id)
+    if user:
+        user.waiting_for_image = waiting
         await session.commit()
 
 

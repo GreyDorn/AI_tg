@@ -1,11 +1,11 @@
 import logging
 from aiogram import Router, F
-from aiogram.filters import Command, CommandObject
+from aiogram.filters import Command, CommandObject, BaseFilter
 from aiogram.types import Message, BufferedInputFile, CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 from config import IMAGE_MODELS
 from db.models import User
-from db.repository import spend_credits, update_user_image_model
+from db.repository import spend_credits, update_user_image_model, set_waiting_for_image
 from llm.image_gen import generate_image, ImageGenerationError
 from llm.provider_status import resolve_image_model_key
 from bot.keyboards.main import image_models_keyboard, cancel_keyboard
@@ -18,7 +18,10 @@ MENU_BUTTONS = {
     "🎨 Create Image", "🖼 Image Models",
 }
 
-_pending_image_users: set[int] = set()
+
+class WaitingForImageFilter(BaseFilter):
+    async def __call__(self, message: Message, db_user: User) -> bool:
+        return db_user.waiting_for_image
 
 
 def _extension_for_mime(mime_type: str) -> str:
@@ -27,10 +30,6 @@ def _extension_for_mime(mime_type: str) -> str:
         "image/jpeg": "jpg",
         "image/webp": "webp",
     }.get(mime_type, "png")
-
-
-def _is_waiting_for_image(message: Message) -> bool:
-    return bool(message.from_user and message.from_user.id in _pending_image_users)
 
 
 def _format_cost(cost: int) -> str:
@@ -44,6 +43,17 @@ def _format_cost(cost: int) -> str:
 def _get_image_model(db_user: User) -> tuple[str, object]:
     model_key = resolve_image_model_key(db_user.current_image_model)
     return model_key, IMAGE_MODELS[model_key]
+
+
+async def _set_waiting(
+    db_session: AsyncSession,
+    db_user: User,
+    waiting: bool,
+) -> None:
+    if db_user.waiting_for_image == waiting:
+        return
+    await set_waiting_for_image(db_session, db_user.id, waiting)
+    db_user.waiting_for_image = waiting
 
 
 async def _show_image_help(message: Message, db_user: User, waiting: bool = False) -> None:
@@ -153,11 +163,15 @@ async def _generate_and_send(
 
 
 @router.callback_query(F.data == "cancel")
-async def cancel_image_prompt(callback: CallbackQuery) -> None:
-    if not callback.from_user or callback.from_user.id not in _pending_image_users:
+async def cancel_image_prompt(
+    callback: CallbackQuery,
+    db_session: AsyncSession,
+    db_user: User,
+) -> None:
+    if not db_user.waiting_for_image:
         await callback.answer("Nothing to cancel.")
         return
-    _pending_image_users.discard(callback.from_user.id)
+    await _set_waiting(db_session, db_user, False)
     await callback.message.edit_text("❌ Image generation cancelled.")
     await callback.answer()
 
@@ -171,10 +185,10 @@ async def cmd_image(
 ) -> None:
     prompt = (command.args or "").strip()
     if not prompt:
-        _pending_image_users.add(message.from_user.id)
+        await _set_waiting(db_session, db_user, True)
         await _show_image_help(message, db_user, waiting=True)
         return
-    _pending_image_users.discard(message.from_user.id)
+    await _set_waiting(db_session, db_user, False)
     await _generate_and_send(message, db_session, db_user, prompt)
 
 
@@ -184,19 +198,19 @@ async def btn_image(
     db_session: AsyncSession,
     db_user: User,
 ) -> None:
-    _pending_image_users.add(message.from_user.id)
+    await _set_waiting(db_session, db_user, True)
     await _show_image_help(message, db_user, waiting=True)
 
 
-@router.message(F.text, _is_waiting_for_image)
+@router.message(F.text, WaitingForImageFilter())
 async def image_prompt_followup(
     message: Message,
     db_session: AsyncSession,
     db_user: User,
 ) -> None:
     if not message.text or message.text.startswith("/") or message.text in MENU_BUTTONS:
-        _pending_image_users.discard(message.from_user.id)
+        await _set_waiting(db_session, db_user, False)
         return
 
-    _pending_image_users.discard(message.from_user.id)
+    await _set_waiting(db_session, db_user, False)
     await _generate_and_send(message, db_session, db_user, message.text.strip())
