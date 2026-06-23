@@ -6,6 +6,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from config import BOT_TOKEN, ADMIN_ID
 from db.repository import init_db, SessionFactory, grant_unlimited
+from llm.provider_status import probe_openrouter_paid
 from bot.middlewares.user import UserMiddleware
 from bot.middlewares.ratelimit import RateLimitMiddleware
 from bot.middlewares.processing_lock import ProcessingLockMiddleware
@@ -28,6 +29,9 @@ async def main() -> None:
 
     await init_db()
     logger.info("База данных инициализирована")
+
+    openrouter_ok = await probe_openrouter_paid()
+    logger.info("OpenRouter paid models: %s", "available" if openrouter_ok else "hidden")
 
     # Выдаём безлимит администратору
     async with SessionFactory() as session:

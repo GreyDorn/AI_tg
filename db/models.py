@@ -33,8 +33,6 @@ class User(Base):
             return True
         return False
 
-    conversations: Mapped[list["Conversation"]] = relationship(back_populates="user")
-
 
 class Conversation(Base):
     __tablename__ = "conversations"

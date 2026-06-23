@@ -1,6 +1,7 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from config import MODELS, DEFAULT_MODEL, IMAGE_MODELS, SUBSCRIPTION_PRICE_STARS, STARS_TOPUP_URL
+from config import MODELS, DEFAULT_MODEL, SUBSCRIPTION_PRICE_STARS, STARS_TOPUP_URL
+from llm.provider_status import get_available_image_models
 
 
 def main_menu() -> ReplyKeyboardMarkup:
@@ -29,7 +30,7 @@ def models_keyboard(current_model: str) -> InlineKeyboardMarkup:
 
 def image_models_keyboard(current_model: str) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    for key, model in IMAGE_MODELS.items():
+    for key, model in get_available_image_models().items():
         mark = "✅ " if key == current_model else ""
         cost = "free" if model.cost_per_image == 0 else f"{model.cost_per_image} req"
         builder.button(

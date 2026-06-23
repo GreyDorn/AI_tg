@@ -3,10 +3,11 @@ from aiogram import Router, F
 from aiogram.filters import Command, CommandObject
 from aiogram.types import Message, BufferedInputFile
 from sqlalchemy.ext.asyncio import AsyncSession
-from config import IMAGE_MODELS, DEFAULT_IMAGE_MODEL
+from config import IMAGE_MODELS
 from db.models import User
 from db.repository import spend_credits, update_user_image_model
 from llm.image_gen import generate_image, ImageGenerationError
+from llm.provider_status import resolve_image_model_key
 from bot.keyboards.main import image_models_keyboard
 
 router = Router()
@@ -41,9 +42,7 @@ def _format_cost(cost: int) -> str:
 
 
 def _get_image_model(db_user: User) -> tuple[str, object]:
-    model_key = db_user.current_image_model
-    if model_key not in IMAGE_MODELS:
-        model_key = DEFAULT_IMAGE_MODEL
+    model_key = resolve_image_model_key(db_user.current_image_model)
     return model_key, IMAGE_MODELS[model_key]
 
 
@@ -75,11 +74,10 @@ async def _generate_and_send(
     db_user: User,
     prompt: str,
 ) -> None:
-    if db_user.current_image_model not in IMAGE_MODELS:
-        db_user.current_image_model = DEFAULT_IMAGE_MODEL
-        await update_user_image_model(db_session, db_user.id, DEFAULT_IMAGE_MODEL)
-
     model_key, model_cfg = _get_image_model(db_user)
+    if model_key != db_user.current_image_model:
+        db_user.current_image_model = model_key
+        await update_user_image_model(db_session, db_user.id, model_key)
     cost = model_cfg.cost_per_image
 
     if len(prompt) > 1000:

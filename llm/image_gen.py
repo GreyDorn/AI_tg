@@ -10,6 +10,8 @@ from config import (
     IMAGE_HEIGHT,
 )
 
+from llm.provider_status import set_openrouter_paid_available
+
 logger = logging.getLogger(__name__)
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -49,6 +51,8 @@ async def _generate_openrouter(model_id: str, prompt: str) -> tuple[bytes, str]:
         ) as resp:
             if resp.status != 200:
                 error = await resp.text()
+                if resp.status == 402:
+                    set_openrouter_paid_available(False)
                 raise ImageGenerationError(f"API error {resp.status}: {error[:300]}")
             data = await resp.json()
 
