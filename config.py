@@ -77,6 +77,22 @@ MODELS: Dict[str, LLMModel] = {
         cost_per_message=1,
         disable_thinking=True,
     ),
+    "gpt-oss-20b": LLMModel(
+        id="openai/gpt-oss-20b",
+        name="ChatGPT OSS 20B (Free)",
+        provider="groq",
+        description="OpenAI open model — fast, free via Groq",
+        cost_per_message=1,
+        disable_thinking=True,
+    ),
+    "gpt-oss-120b": LLMModel(
+        id="openai/gpt-oss-120b",
+        name="ChatGPT OSS 120B (Free)",
+        provider="groq",
+        description="OpenAI flagship open model — free via Groq",
+        cost_per_message=1,
+        disable_thinking=True,
+    ),
     "deepseek-v3": LLMModel(
         id="deepseek-chat",
         name="DeepSeek V3",

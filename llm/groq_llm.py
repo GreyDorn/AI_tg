@@ -13,6 +13,7 @@ THINKING_TAGS = (
 )
 
 COMPOUND_MODEL_IDS = frozenset({"groq/compound", "groq/compound-mini"})
+GPT_OSS_MODEL_IDS = frozenset({"openai/gpt-oss-20b", "openai/gpt-oss-120b"})
 COMPOUND_SYSTEM_PROMPT = (
     "Reply with only the final answer. "
     "No reasoning, no explanation, no headers."
@@ -32,12 +33,16 @@ class GroqLLM(BaseLLM):
             if not history or history[0].get("role") != "system":
                 history.insert(0, {"role": "system", "content": COMPOUND_SYSTEM_PROMPT})
 
-        stream = await self.client.chat.completions.create(
-            model=model_id,
-            messages=history,
-            stream=True,
-            max_tokens=4096,
-        )
+        request_kwargs: dict = {
+            "model": model_id,
+            "messages": history,
+            "stream": True,
+            "max_tokens": 4096,
+        }
+        if model_id in GPT_OSS_MODEL_IDS and disable_thinking:
+            request_kwargs["include_reasoning"] = False
+
+        stream = await self.client.chat.completions.create(**request_kwargs)
 
         in_think = False
         active_close_tag = ""
