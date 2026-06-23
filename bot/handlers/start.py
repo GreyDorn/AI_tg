@@ -2,7 +2,7 @@ from aiogram import Router
 from aiogram.filters import CommandStart, Command
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
-from config import FREE_CREDITS_ON_START, DAILY_FREE_CREDITS, REFERRAL_BONUS_CREDITS, SUBSCRIPTION_PRICE_STARS, IMAGE_MODELS, MODELS
+from config import FREE_CREDITS_ON_START, DAILY_FREE_CREDITS, REFERRAL_BONUS_CREDITS, SUBSCRIPTION_PRICE_STARS, IMAGE_MODELS, MUSIC_MODELS, MODELS
 from db.models import User
 from db.repository import create_conversation
 from bot.keyboards.main import main_menu
@@ -22,7 +22,8 @@ async def cmd_start(message: Message, db_session: AsyncSession, db_user: User) -
         f"• Write code and content\n"
         f"• Analyze and explain\n"
         f"• Translate and edit\n"
-        f"• Create images with /image\n\n"
+        f"• Create images with /image\n"
+        f"• Create music with /music\n\n"
         f"Just send me a message 👇",
         parse_mode="HTML",
         reply_markup=main_menu(),
@@ -41,6 +42,12 @@ async def cmd_help(message: Message) -> None:
         + (f" ({m.cost_per_image} req)" if m.cost_per_image else " (free)")
         for m in IMAGE_MODELS.values()
     )
+    music_models_text = "\n".join(
+        f"• <b>{m.name}</b> — {m.description}"
+        + (f" ({m.cost_per_track} req)" if m.cost_per_track else " (free)")
+        + f", ~{m.duration_seconds}s"
+        for m in MUSIC_MODELS.values()
+    )
     await message.answer(
         f"<b>📚 Help</b>\n\n"
         f"<b>Commands:</b>\n"
@@ -49,12 +56,15 @@ async def cmd_help(message: Message) -> None:
         f"/models — choose a text model\n"
         f"/image — create an image\n"
         f"/imagemodels — choose image model\n"
+        f"/music — create music\n"
+        f"/musicmodels — choose music model\n"
         f"/balance — your request balance\n"
         f"/buy — unlimited subscription\n"
         f"/referral — referral program\n"
         f"/help — this help message\n\n"
         f"<b>Text models:</b>\n{models_text}\n\n"
         f"<b>Image models:</b>\n{image_models_text}\n\n"
+        f"<b>Music models:</b>\n{music_models_text}\n\n"
         f"<b>Free requests:</b>\n"
         f"• {FREE_CREDITS_ON_START} requests on registration\n"
         f"• +{DAILY_FREE_CREDITS} every day\n"

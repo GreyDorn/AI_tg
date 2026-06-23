@@ -1,7 +1,7 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from config import MODELS, DEFAULT_MODEL, SUBSCRIPTION_PRICE_STARS, STARS_TOPUP_URL
-from llm.provider_status import get_available_image_models
+from llm.provider_status import get_available_image_models, get_available_music_models
 
 
 def main_menu() -> ReplyKeyboardMarkup:
@@ -9,6 +9,7 @@ def main_menu() -> ReplyKeyboardMarkup:
         keyboard=[
             [KeyboardButton(text="💬 New Chat"), KeyboardButton(text="🤖 Models")],
             [KeyboardButton(text="🎨 Create Image"), KeyboardButton(text="🖼 Image Models")],
+            [KeyboardButton(text="🎵 Create Music"), KeyboardButton(text="🎵 Music Models")],
             [KeyboardButton(text="💰 Balance"), KeyboardButton(text="👥 Referral")],
             [KeyboardButton(text="💎 Subscription")],
         ],
@@ -44,6 +45,25 @@ def image_models_keyboard(current_model: str) -> InlineKeyboardMarkup:
 def cancel_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[[InlineKeyboardButton(text="❌ Cancel", callback_data="cancel")]]
+    )
+
+
+def music_models_keyboard(current_model: str) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for key, model in get_available_music_models().items():
+        mark = "✅ " if key == current_model else ""
+        cost = "free" if model.cost_per_track == 0 else f"{model.cost_per_track} req"
+        builder.button(
+            text=f"{mark}{model.name} ({cost})",
+            callback_data=f"musicmodel:{key}",
+        )
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def cancel_music_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="❌ Cancel", callback_data="cancel_music")]]
     )
 
 

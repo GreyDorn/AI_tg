@@ -219,3 +219,25 @@ def resolve_image_model_key(current: str) -> str:
     if DEFAULT_IMAGE_MODEL in available:
         return DEFAULT_IMAGE_MODEL
     return next(iter(available))
+
+
+def get_available_music_models() -> dict:
+    from config import MUSIC_MODELS
+    from llm.music_gen import is_pollinations_music_configured
+
+    if is_pollinations_music_configured():
+        return dict(MUSIC_MODELS)
+    return {}
+
+
+def resolve_music_model_key(current: str) -> str:
+    from config import DEFAULT_MUSIC_MODEL
+
+    available = get_available_music_models()
+    if not available:
+        return DEFAULT_MUSIC_MODEL
+    if current in available:
+        return current
+    if DEFAULT_MUSIC_MODEL in available:
+        return DEFAULT_MUSIC_MODEL
+    return next(iter(available))

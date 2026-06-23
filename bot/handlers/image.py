@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 MENU_BUTTONS = {
     "💬 New Chat", "🤖 Models", "💰 Balance", "👥 Referral", "💎 Subscription",
-    "🎨 Create Image", "🖼 Image Models",
+    "🎨 Create Image", "🖼 Image Models", "🎵 Create Music", "🎵 Music Models",
 }
 
 

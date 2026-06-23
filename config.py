@@ -157,6 +157,38 @@ IMAGE_MAX_TOKENS = 1024
 IMAGE_WIDTH = 1024
 IMAGE_HEIGHT = 1024
 
+
+@dataclass
+class MusicModel:
+    id: str
+    name: str
+    provider: str
+    description: str
+    cost_per_track: int
+    duration_seconds: int = 30
+
+
+MUSIC_MODELS: Dict[str, MusicModel] = {
+    "elevenmusic-free": MusicModel(
+        id="elevenmusic",
+        name="Music Free",
+        provider="pollinations",
+        description="Short AI music track",
+        cost_per_track=0,
+        duration_seconds=30,
+    ),
+    "acestep": MusicModel(
+        id="acestep",
+        name="ACE-Step",
+        provider="pollinations",
+        description="Longer music generation",
+        cost_per_track=2,
+        duration_seconds=60,
+    ),
+}
+
+DEFAULT_MUSIC_MODEL = "elevenmusic-free"
+
 # Subscription
 SUBSCRIPTION_PRICE_STARS = 299   # price in Telegram Stars
 SUBSCRIPTION_DAYS = 30           # duration in days
@@ -187,4 +219,5 @@ ADMIN_ID: int = int(os.getenv("ADMIN_ID", "0"))
 OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_PROBE_INTERVAL: int = int(os.getenv("OPENROUTER_PROBE_INTERVAL", "1800"))
 DEEPSEEK_API_KEY: str = os.getenv("DEEPSEEK_API_KEY", "")
+POLLINATIONS_API_KEY: str = os.getenv("POLLINATIONS_API_KEY", "")
 DATABASE_URL: str = "sqlite+aiosqlite:///bot.db"

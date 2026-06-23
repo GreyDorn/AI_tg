@@ -19,6 +19,8 @@ class User(Base):
     current_model: Mapped[str] = mapped_column(String(64), default="llama-3.3-70b")
     current_image_model: Mapped[str] = mapped_column(String(64), default="flux-free")
     waiting_for_image: Mapped[bool] = mapped_column(Boolean, default=False)
+    current_music_model: Mapped[str] = mapped_column(String(64), default="elevenmusic-free")
+    waiting_for_music: Mapped[bool] = mapped_column(Boolean, default=False)
     referred_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"))
     daily_credits_claimed_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
