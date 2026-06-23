@@ -156,10 +156,16 @@ async def _generate_and_send(
     except Exception:
         pass
 
-    await message.answer_photo(
-        BufferedInputFile(image_bytes, filename=f"image.{ext}"),
-        caption=caption,
-    )
+    try:
+        await message.answer_photo(
+            BufferedInputFile(image_bytes, filename=f"image.{ext}"),
+            caption=caption,
+        )
+    except Exception:
+        logger.exception("Failed to send photo user=%s model=%s", db_user.id, model_key)
+        await message.answer(
+            "⚠️ Image was generated but could not be sent. Please try again.",
+        )
 
 
 @router.callback_query(F.data == "cancel")
