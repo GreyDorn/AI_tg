@@ -79,6 +79,35 @@ def _photo_user_content(caption: str | None) -> str:
     return f"[📷 Image] {caption}" if caption else "[📷 Image]"
 
 
+def _is_gemini_busy(error_str: str) -> bool:
+    low = error_str.lower()
+    return (
+        "503" in error_str
+        or "unavailable" in low
+        or "overloaded" in low
+        or "high demand" in low
+    )
+
+
+def _is_rate_limited(error_str: str) -> bool:
+    low = error_str.lower()
+    return (
+        "429" in error_str
+        or "quota" in low
+        or "rate" in low
+        or "resource_exhausted" in low
+    )
+
+
+async def _reply_vision_unavailable(reply: Message) -> None:
+    await reply.edit_text(
+        "⏳ <b>Gemini is temporarily unavailable</b>\n\n"
+        "Photo analysis uses <b>Gemini</b> only — other models cannot read images.\n\n"
+        "The service is busy right now. Please try again in a minute.",
+        parse_mode="HTML",
+    )
+
+
 async def _reply_streaming(
     message: Message,
     reply: Message,
@@ -124,7 +153,7 @@ async def _reply_streaming(
         error_str = str(e)
         logger.error("LLM error for user %s model %s: %s", db_user.id, model_key, error_str)
 
-        if "429" in error_str or "quota" in error_str.lower() or "rate" in error_str.lower() or "resource_exhausted" in error_str.lower():
+        if _is_rate_limited(error_str):
             if vision_mode:
                 await reply.edit_text(
                     "⏳ <b>Gemini limit reached</b>\n\n"
@@ -141,14 +170,19 @@ async def _reply_streaming(
                     parse_mode="HTML",
                     reply_markup=models_keyboard(model_key),
                 )
+        elif vision_mode and _is_gemini_busy(error_str):
+            await _reply_vision_unavailable(reply)
         elif "402" in error_str or "insufficient balance" in error_str.lower() or "payment required" in error_str.lower():
-            await reply.edit_text(
-                f"💳 <b>Model temporarily unavailable</b>\n\n"
-                f"<b>{model_name}</b> is not available right now due to provider limits.\n\n"
-                f"Choose another model 👇",
-                parse_mode="HTML",
-                reply_markup=models_keyboard(model_key),
-            )
+            if vision_mode:
+                await _reply_vision_unavailable(reply)
+            else:
+                await reply.edit_text(
+                    f"💳 <b>Model temporarily unavailable</b>\n\n"
+                    f"<b>{model_name}</b> is not available right now due to provider limits.\n\n"
+                    f"Choose another model 👇",
+                    parse_mode="HTML",
+                    reply_markup=models_keyboard(model_key),
+                )
         elif "decommissioned" in error_str or "not supported" in error_str:
             await reply.edit_text(
                 f"❌ <b>Model unavailable</b>\n\n"
@@ -171,12 +205,19 @@ async def _reply_streaming(
                 parse_mode="HTML",
             )
         else:
-            await reply.edit_text(
-                f"⚠️ <b>Model error</b>\n\n"
-                f"Try again or choose a different model 👇",
-                parse_mode="HTML",
-                reply_markup=models_keyboard(model_key),
-            )
+            if vision_mode:
+                await reply.edit_text(
+                    "⚠️ <b>Could not analyze the photo</b>\n\n"
+                    "Please try again in a minute.",
+                    parse_mode="HTML",
+                )
+            else:
+                await reply.edit_text(
+                    f"⚠️ <b>Model error</b>\n\n"
+                    f"Try again or choose a different model 👇",
+                    parse_mode="HTML",
+                    reply_markup=models_keyboard(model_key),
+                )
         return
 
     await add_message(db_session, conv_id, "assistant", full_response)
