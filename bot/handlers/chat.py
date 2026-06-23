@@ -13,6 +13,7 @@ from db.repository import (
     get_conversation_messages,
     spend_credits,
     add_credits,
+    update_user_model,
 )
 from llm import get_llm
 from llm.gemini import GeminiLLM, VISION_UNAVAILABLE_MSG
@@ -275,6 +276,11 @@ async def handle_photo(message: Message, db_session: AsyncSession, db_user: User
     if not await _ensure_credits(message, db_user, vision_cfg.cost_per_message):
         return
 
+    switched_model = db_user.current_model != VISION_MODEL_KEY
+    if switched_model:
+        await update_user_model(db_session, db_user.id, VISION_MODEL_KEY)
+        db_user.current_model = VISION_MODEL_KEY
+
     conv = await get_active_conversation(db_session, db_user.id)
     if not conv:
         conv = await create_conversation(db_session, db_user.id, db_user.current_model)
@@ -313,7 +319,11 @@ async def handle_photo(message: Message, db_session: AsyncSession, db_user: User
     logger.info("Photo analysis user=%s prompt=%r size=%d", db_user.id, prompt[:120], len(image_bytes))
 
     await message.bot.send_chat_action(message.chat.id, "typing")
-    reply = await message.answer("📷 Analyzing with Gemini...")
+    if switched_model:
+        status = "📷 Switched to <b>Gemini</b> — analyzing photo..."
+    else:
+        status = "📷 Analyzing with Gemini..."
+    reply = await message.answer(status, parse_mode="HTML")
 
     await _reply_streaming(
         message,
