@@ -9,7 +9,7 @@ from aiogram.exceptions import TelegramAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 from config import SUBSCRIPTION_PRICE_STARS, SUBSCRIPTION_DAYS, PREMIUM_BOT_STARS_URL
 from db.models import User
-from db.repository import activate_subscription
+from db.repository import process_subscription_payment
 from bot.keyboards.main import subscription_keyboard
 
 router = Router()
@@ -43,7 +43,7 @@ async def cmd_buy(message: Message, db_user: User) -> None:
         f"• Unlimited requests to all models\n"
         f"• All models, no restrictions\n"
         f"• {SUBSCRIPTION_DAYS} days of access{sub_status}\n\n"
-        f"Price: <b>{SUBSCRIPTION_PRICE_STARS} ⭐ Stars / month</b>\n\n"
+        f"Price: <b>{SUBSCRIPTION_PRICE_STARS} ⭐ Stars per month</b>\n\n"
         f"ℹ️ Need stars? Tap <b>Buy Stars</b> below — the purchase window "
         f"opens right here (via PremiumBot), without leaving the chat.\n"
         f"Then tap <b>Subscribe</b> to activate unlimited access.",
@@ -123,17 +123,41 @@ async def successful_payment(
         return
 
     charge_id = payment.telegram_payment_charge_id
-    subscription_until = await activate_subscription(db_session, db_user.id, SUBSCRIPTION_DAYS)
+    result = await process_subscription_payment(
+        db_session,
+        user_id=db_user.id,
+        charge_id=charge_id,
+        amount=payment.total_amount,
+        payload=payment.invoice_payload,
+        days=SUBSCRIPTION_DAYS,
+    )
+
+    if not result.subscription_until:
+        logger.error("Subscription payment failed: user=%s charge_id=%s", db_user.id, charge_id)
+        await message.answer(
+            "Payment received, but subscription could not be activated. "
+            "Please contact /paysupport."
+        )
+        return
 
     logger.info(
-        "Subscription: user=%s until=%s charge_id=%s",
-        db_user.id, subscription_until, charge_id,
+        "Subscription: user=%s until=%s charge_id=%s duplicate=%s",
+        db_user.id, result.subscription_until, charge_id, result.is_duplicate,
     )
+
+    until_text = result.subscription_until.strftime("%d.%m.%Y")
+    if result.is_duplicate:
+        await message.answer(
+            f"✅ <b>Payment already processed</b>\n\n"
+            f"Your subscription is active until <b>{until_text}</b>.",
+            parse_mode="HTML",
+        )
+        return
 
     await message.answer(
         f"✅ <b>Subscription activated!</b>\n\n"
-        f"Unlimited access to all models until "
-        f"<b>{subscription_until.strftime('%d.%m.%Y')}</b> 🎉",
+        f"Unlimited access to all models until <b>{until_text}</b> 🎉",
+        parse_mode="HTML",
     )
 
 

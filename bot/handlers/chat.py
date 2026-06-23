@@ -12,6 +12,7 @@ from db.repository import (
     add_message,
     get_conversation_messages,
     spend_credits,
+    add_credits,
 )
 from llm import get_llm
 from bot.keyboards.main import models_keyboard
@@ -76,7 +77,20 @@ async def handle_message(message: Message, db_session: AsyncSession, db_user: Us
     all_messages = await get_conversation_messages(db_session, conv.id)
     context = all_messages[-MAX_CONTEXT_MESSAGES:]
 
-    await spend_credits(db_session, db_user.id, model_cfg.cost_per_message) if not db_user.has_unlimited_access else None
+    credits_spent = 0
+    if not db_user.has_unlimited_access:
+        if await spend_credits(db_session, db_user.id, model_cfg.cost_per_message):
+            credits_spent = model_cfg.cost_per_message
+        else:
+            await message.answer(
+                f"❌ <b>Out of requests</b>\n\n"
+                f"You have: <b>{db_user.credits}</b>\n\n"
+                f"Come back tomorrow for free requests 🎁\n"
+                f"Or get unlimited access → /buy",
+                parse_mode="HTML",
+            )
+            return
+
     await message.bot.send_chat_action(message.chat.id, "typing")
 
     reply = await message.answer("⏳")
@@ -99,6 +113,8 @@ async def handle_message(message: Message, db_session: AsyncSession, db_user: Us
                     pass
 
         if not full_response:
+            if credits_spent:
+                await add_credits(db_session, db_user.id, credits_spent)
             await reply.edit_text("⚠️ The model returned an empty response.")
             return
 
@@ -108,6 +124,8 @@ async def handle_message(message: Message, db_session: AsyncSession, db_user: Us
             await _answer_formatted(message, part)
 
     except Exception as e:
+        if credits_spent:
+            await add_credits(db_session, db_user.id, credits_spent)
         error_str = str(e)
         logger.error("LLM error for user %s model %s: %s", db_user.id, model_key, error_str)
 

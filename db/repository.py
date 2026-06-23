@@ -1,8 +1,10 @@
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
+from dataclasses import dataclass
 from sqlalchemy import select, delete, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from config import DATABASE_URL, FREE_CREDITS_ON_START, DAILY_FREE_CREDITS, REFERRAL_BONUS_CREDITS
-from db.models import Base, User, Conversation, Message
+from db.models import Base, User, Conversation, Message, Payment
 
 
 engine = create_async_engine(DATABASE_URL)
@@ -165,13 +167,68 @@ async def grant_unlimited(session: AsyncSession, user_id: int) -> bool:
 
 async def activate_subscription(session: AsyncSession, user_id: int, days: int = 30) -> datetime:
     """Активирует платную подписку на N дней. Возвращает дату окончания."""
-    from datetime import timedelta
     user = await session.get(User, user_id)
     if not user:
         return None
     now = datetime.now()
-    # Если подписка ещё активна — продлеваем от текущего конца
     base = user.subscription_until if user.subscription_until and user.subscription_until > now else now
     user.subscription_until = base + timedelta(days=days)
     await session.commit()
     return user.subscription_until
+
+
+@dataclass
+class PaymentResult:
+    subscription_until: datetime | None
+    is_duplicate: bool
+
+
+async def _get_payment_by_charge_id(session: AsyncSession, charge_id: str) -> Payment | None:
+    result = await session.execute(select(Payment).where(Payment.charge_id == charge_id))
+    return result.scalar_one_or_none()
+
+
+async def process_subscription_payment(
+    session: AsyncSession,
+    user_id: int,
+    charge_id: str,
+    amount: int,
+    payload: str,
+    days: int = 30,
+) -> PaymentResult:
+    """Идемпотентная обработка оплаты подписки по charge_id."""
+    existing = await _get_payment_by_charge_id(session, charge_id)
+    if existing:
+        return PaymentResult(subscription_until=existing.subscription_until, is_duplicate=True)
+
+    user = await session.get(User, user_id)
+    if not user:
+        return PaymentResult(subscription_until=None, is_duplicate=False)
+
+    now = datetime.now()
+    base = user.subscription_until if user.subscription_until and user.subscription_until > now else now
+    subscription_until = base + timedelta(days=days)
+    user.subscription_until = subscription_until
+
+    session.add(
+        Payment(
+            charge_id=charge_id,
+            user_id=user_id,
+            amount=amount,
+            currency="XTR",
+            payload=payload,
+            subscription_until=subscription_until,
+        )
+    )
+
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        existing = await _get_payment_by_charge_id(session, charge_id)
+        if existing:
+            return PaymentResult(subscription_until=existing.subscription_until, is_duplicate=True)
+        raise
+
+    return PaymentResult(subscription_until=subscription_until, is_duplicate=False)
+
