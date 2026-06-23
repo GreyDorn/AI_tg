@@ -1,8 +1,9 @@
 from typing import AsyncIterator
 from groq import AsyncGroq
-from config import GROQ_API_KEY, MAX_CONTEXT_CHARS
+from config import GROQ_API_KEY, CHAT_SYSTEM_PROMPT
 from db.models import Message
 from llm.base import BaseLLM
+from llm.chat_context import prepare_chat_history
 
 _QWEN_THINK_OPEN = chr(60) + "think" + chr(62)
 _QWEN_THINK_CLOSE = chr(60) + "/" + "think" + chr(62)
@@ -15,6 +16,7 @@ THINKING_TAGS = (
 COMPOUND_MODEL_IDS = frozenset({"groq/compound", "groq/compound-mini"})
 GPT_OSS_MODEL_IDS = frozenset({"openai/gpt-oss-20b", "openai/gpt-oss-120b"})
 COMPOUND_SYSTEM_PROMPT = (
+    CHAT_SYSTEM_PROMPT + "\n\n"
     "Reply with only the final answer. "
     "No reasoning, no explanation, no headers."
 )
@@ -25,13 +27,19 @@ class GroqLLM(BaseLLM):
         self.client = AsyncGroq(api_key=GROQ_API_KEY)
 
     async def stream(
-        self, messages: list[Message], model_id: str, disable_thinking: bool = False
+        self,
+        messages: list[Message],
+        model_id: str,
+        disable_thinking: bool = False,
+        system_prompt: str | None = None,
     ) -> AsyncIterator[str]:
-        history = self._build_history(messages)
-        history = self._trim_context(history)
         if model_id in COMPOUND_MODEL_IDS and disable_thinking:
-            if not history or history[0].get("role") != "system":
-                history.insert(0, {"role": "system", "content": COMPOUND_SYSTEM_PROMPT})
+            prompt = COMPOUND_SYSTEM_PROMPT
+        elif system_prompt:
+            prompt = system_prompt
+        else:
+            prompt = None
+        history = prepare_chat_history(messages, system_prompt=prompt)
 
         request_kwargs: dict = {
             "model": model_id,
@@ -105,9 +113,3 @@ class GroqLLM(BaseLLM):
                 i = end + close_len
         return result, in_think, active_close_tag
 
-    def _trim_context(self, history: list[dict]) -> list[dict]:
-        total = sum(len(m["content"]) for m in history)
-        while total > MAX_CONTEXT_CHARS and len(history) > 1:
-            removed = history.pop(0)
-            total -= len(removed["content"])
-        return history

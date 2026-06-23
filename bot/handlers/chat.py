@@ -76,6 +76,13 @@ async def handle_message(message: Message, db_session: AsyncSession, db_user: Us
 
     all_messages = await get_conversation_messages(db_session, conv.id)
     context = all_messages[-MAX_CONTEXT_MESSAGES:]
+    if len(all_messages) > len(context):
+        logger.info(
+            "Context window for user %s: using last %d of %d messages",
+            db_user.id,
+            len(context),
+            len(all_messages),
+        )
 
     credits_spent = 0
     if not db_user.has_unlimited_access:

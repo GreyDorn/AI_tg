@@ -2,10 +2,11 @@ import logging
 from typing import AsyncIterator
 from google import genai
 from google.genai import types
-from config import GEMINI_API_KEY, MAX_CONTEXT_CHARS
+from config import GEMINI_API_KEY
 from db.models import Message
 from llm.base import BaseLLM
 from llm.groq_llm import GroqLLM
+from llm.chat_context import prepare_chat_history
 
 logger = logging.getLogger(__name__)
 
@@ -30,11 +31,15 @@ class GeminiLLM(BaseLLM):
         self._groq = GroqLLM()
 
     async def stream(
-        self, messages: list[Message], model_id: str, disable_thinking: bool = False
+        self,
+        messages: list[Message],
+        model_id: str,
+        disable_thinking: bool = False,
+        system_prompt: str | None = None,
     ) -> AsyncIterator[str]:
         if self.client:
             try:
-                async for chunk in self._stream_gemini(messages, model_id):
+                async for chunk in self._stream_gemini(messages, model_id, system_prompt):
                     yield chunk
                 return
             except Exception as exc:
@@ -43,29 +48,40 @@ class GeminiLLM(BaseLLM):
                 else:
                     raise
 
-        async for chunk in self._groq.stream(messages, GEMINI_FALLBACK_MODEL, disable_thinking):
+        async for chunk in self._groq.stream(
+            messages, GEMINI_FALLBACK_MODEL, disable_thinking, system_prompt=system_prompt
+        ):
             yield chunk
 
     async def _stream_gemini(
-        self, messages: list[Message], model_id: str
+        self,
+        messages: list[Message],
+        model_id: str,
+        system_prompt: str | None = None,
     ) -> AsyncIterator[str]:
-        contents = self._build_contents(messages)
+        history = prepare_chat_history(messages, system_prompt=system_prompt)
+        system_instruction = None
+        body = history
+        if body and body[0].get("role") == "system":
+            system_instruction = body[0]["content"]
+            body = body[1:]
+
+        contents = [
+            types.Content(
+                role="user" if msg["role"] == "user" else "model",
+                parts=[types.Part(text=msg["content"])],
+            )
+            for msg in body
+        ]
+        config = (
+            types.GenerateContentConfig(system_instruction=system_instruction)
+            if system_instruction
+            else None
+        )
         async for chunk in await self.client.aio.models.generate_content_stream(
             model=model_id,
             contents=contents,
+            config=config,
         ):
             if chunk.text:
                 yield chunk.text
-
-    def _build_contents(self, messages: list[Message]) -> list[types.Content]:
-        contents = []
-        total_chars = sum(len(m.content) for m in messages)
-
-        while total_chars > MAX_CONTEXT_CHARS and len(messages) > 1:
-            total_chars -= len(messages[0].content)
-            messages = messages[1:]
-
-        for msg in messages:
-            role = "user" if msg.role == "user" else "model"
-            contents.append(types.Content(role=role, parts=[types.Part(text=msg.content)]))
-        return contents

@@ -1,19 +1,23 @@
 from typing import AsyncIterator
 import aiohttp
 import json
-from config import OPENROUTER_API_KEY, MAX_CONTEXT_CHARS
+from config import OPENROUTER_API_KEY
 from db.models import Message
 from llm.base import BaseLLM
+from llm.chat_context import prepare_chat_history
 
 
 class OpenRouterLLM(BaseLLM):
     BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
 
     async def stream(
-        self, messages: list[Message], model_id: str, disable_thinking: bool = False
+        self,
+        messages: list[Message],
+        model_id: str,
+        disable_thinking: bool = False,
+        system_prompt: str | None = None,
     ) -> AsyncIterator[str]:
-        history = self._build_history(messages)
-        history = self._trim_context(history)
+        history = prepare_chat_history(messages, system_prompt=system_prompt)
 
         headers = {
             "Authorization": f"Bearer {OPENROUTER_API_KEY}",
@@ -48,9 +52,3 @@ class OpenRouterLLM(BaseLLM):
                     except (json.JSONDecodeError, KeyError, IndexError):
                         continue
 
-    def _trim_context(self, history: list[dict]) -> list[dict]:
-        total = sum(len(m["content"]) for m in history)
-        while total > MAX_CONTEXT_CHARS and len(history) > 1:
-            removed = history.pop(0)
-            total -= len(removed["content"])
-        return history

@@ -208,8 +208,22 @@ DAILY_FREE_CREDITS = 2          # every day
 REFERRAL_BONUS_CREDITS = 3      # per referral
 
 # Dialog context
-MAX_CONTEXT_MESSAGES = 20
-MAX_CONTEXT_CHARS = 4000
+MAX_CONTEXT_MESSAGES = 30
+MAX_CONTEXT_CHARS = 14000
+
+CHAT_SYSTEM_PROMPT = (
+    "You are a helpful AI assistant in a Telegram bot.\n\n"
+    "Memory and consistency:\n"
+    "- Remember ALL facts, names, numbers, places, and details the user mentioned earlier.\n"
+    "- Before answering, check your reply against what was already established in the chat.\n"
+    "- If the user points out a mistake, do NOT only agree (e.g. \"you are right\"). "
+    "Briefly acknowledge the error and give the corrected answer or rewritten text.\n\n"
+    "Creative writing (stories, fairy tales, poems):\n"
+    "- Keep character names, relationships, and plot facts consistent with earlier messages.\n"
+    "- Write with a clear structure, emotions, and vivid concrete details.\n"
+    "- When continuing a story, use the facts already established — do not contradict them.\n\n"
+    "Reply in the same language the user uses."
+)
 
 # Config from .env
 BOT_TOKEN: str = os.getenv("BOT_TOKEN", "")

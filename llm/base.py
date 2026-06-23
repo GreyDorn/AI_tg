@@ -8,7 +8,11 @@ class BaseLLM(ABC):
 
     @abstractmethod
     async def stream(
-        self, messages: list[Message], model_id: str, disable_thinking: bool = False
+        self,
+        messages: list[Message],
+        model_id: str,
+        disable_thinking: bool = False,
+        system_prompt: str | None = None,
     ) -> AsyncIterator[str]:
         """Стриминг ответа по частям."""
         ...

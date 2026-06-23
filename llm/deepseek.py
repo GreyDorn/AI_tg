@@ -1,13 +1,13 @@
 import json
 import logging
 import aiohttp
-from types import SimpleNamespace
 from typing import AsyncIterator
-from config import DEEPSEEK_API_KEY, OPENROUTER_API_KEY, MAX_CONTEXT_CHARS
+from config import DEEPSEEK_API_KEY, OPENROUTER_API_KEY, CHAT_SYSTEM_PROMPT
 from db.models import Message
 from llm.base import BaseLLM
 from llm.groq_llm import GroqLLM
 from llm.openrouter import OpenRouterLLM
+from llm.chat_context import prepare_chat_history
 
 logger = logging.getLogger(__name__)
 
@@ -52,12 +52,11 @@ def _is_retryable_error(exc: Exception) -> bool:
     )
 
 
-def _with_fallback_identity(messages: list[Message], model_id: str) -> list:
-    prompt = FALLBACK_IDENTITY.get(model_id)
-    if not prompt:
-        return messages
-    system = SimpleNamespace(role="system", content=prompt)
-    return [system, *messages]
+def _fallback_system_prompt(model_id: str) -> str | None:
+    extra = FALLBACK_IDENTITY.get(model_id)
+    if not extra:
+        return None
+    return f"{CHAT_SYSTEM_PROMPT}\n\n{extra}"
 
 
 class DeepSeekLLM(BaseLLM):
@@ -66,7 +65,11 @@ class DeepSeekLLM(BaseLLM):
         self._openrouter = OpenRouterLLM()
 
     async def stream(
-        self, messages: list[Message], model_id: str, disable_thinking: bool = False
+        self,
+        messages: list[Message],
+        model_id: str,
+        disable_thinking: bool = False,
+        system_prompt: str | None = None,
     ) -> AsyncIterator[str]:
         routes = ROUTES.get(model_id, [("direct", model_id)])
         errors: list[str] = []
@@ -84,9 +87,13 @@ class DeepSeekLLM(BaseLLM):
                 elif backend == "openrouter":
                     stream = self._openrouter.stream(messages, actual_model, disable_thinking)
                 elif backend == "groq":
-                    groq_messages = _with_fallback_identity(messages, model_id)
                     groq_thinking = disable_thinking or model_id == "deepseek-reasoner"
-                    stream = self._groq.stream(groq_messages, actual_model, groq_thinking)
+                    stream = self._groq.stream(
+                        messages,
+                        actual_model,
+                        groq_thinking,
+                        system_prompt=_fallback_system_prompt(model_id),
+                    )
                 else:
                     continue
 
@@ -107,8 +114,7 @@ class DeepSeekLLM(BaseLLM):
     async def _stream_direct(
         self, messages: list[Message], model_id: str
     ) -> AsyncIterator[str]:
-        history = self._build_history(messages)
-        history = self._trim_context(history)
+        history = prepare_chat_history(messages)
 
         headers = {
             "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
@@ -147,9 +153,3 @@ class DeepSeekLLM(BaseLLM):
                     except (json.JSONDecodeError, KeyError, IndexError):
                         continue
 
-    def _trim_context(self, history: list[dict]) -> list[dict]:
-        total = sum(len(m["content"]) for m in history)
-        while total > MAX_CONTEXT_CHARS and len(history) > 1:
-            removed = history.pop(0)
-            total -= len(removed["content"])
-        return history
