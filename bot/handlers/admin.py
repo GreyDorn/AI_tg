@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import ADMIN_ID, OPENROUTER_PROBE_INTERVAL
 from db.models import User
 from db.repository import grant_unlimited, get_user, get_bot_stats
+from llm.provider_limits import get_provider_limits_text
 from llm.provider_status import get_openrouter_status, OPENROUTER_CREDITS_URL
 
 router = Router()
@@ -16,6 +17,7 @@ async def cmd_stats(message: Message, db_session: AsyncSession, db_user: User) -
         return
 
     stats = await get_bot_stats(db_session)
+    limits = await get_provider_limits_text()
     await message.answer(
         "📊 <b>Bot statistics</b>\n\n"
         f"<b>Users</b>\n"
@@ -30,8 +32,10 @@ async def cmd_stats(message: Message, db_session: AsyncSession, db_user: User) -
         f"• Today: <b>{stats.messages_today}</b>\n\n"
         f"<b>Payments (Stars)</b>\n"
         f"• All time: <b>{stats.payments_total}</b> payments, <b>{stats.stars_total}</b> ⭐\n"
-        f"• Last 30 days: <b>{stats.payments_30d}</b> payments, <b>{stats.stars_30d}</b> ⭐",
+        f"• Last 30 days: <b>{stats.payments_30d}</b> payments, <b>{stats.stars_30d}</b> ⭐\n\n"
+        f"{limits}",
         parse_mode="HTML",
+        disable_web_page_preview=True,
     )
 
 
