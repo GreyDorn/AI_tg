@@ -32,6 +32,7 @@ async def init_db() -> None:
             "ALTER TABLE users ADD COLUMN referral_milestone_level INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE users ADD COLUMN login_streak INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE users ADD COLUMN last_active_date DATETIME",
+            "ALTER TABLE users ADD COLUMN daily_reminder_sent_at DATETIME",
         ]:
             try:
                 await conn.execute(text(column_sql))
@@ -307,6 +308,40 @@ async def count_referrals(session: AsyncSession, user_id: int) -> int:
         select(func.count()).select_from(User).where(User.referred_by == user_id)
     )
     return int(result.scalar_one() or 0)
+
+
+async def mark_daily_reminder_sent(session: AsyncSession, user_id: int) -> None:
+    user = await session.get(User, user_id)
+    if user:
+        user.daily_reminder_sent_at = datetime.now()
+        await session.commit()
+
+
+async def get_users_for_daily_reminder(session: AsyncSession) -> list[User]:
+    """Users eligible for a daily bonus reminder (active, not unlimited, not claimed today)."""
+    now = datetime.now()
+    today = date.today()
+    active_since = now - timedelta(days=14)
+
+    result = await session.execute(
+        select(User).where(
+            User.is_unlimited.is_(False),
+            (User.subscription_until.is_(None)) | (User.subscription_until <= now),
+        )
+    )
+    users = []
+    for user in result.scalars():
+        if user.has_unlimited_access:
+            continue
+        if user.daily_credits_claimed_at and user.daily_credits_claimed_at.date() == today:
+            continue
+        if user.daily_reminder_sent_at and user.daily_reminder_sent_at.date() == today:
+            continue
+        last_touch = user.last_active_date or user.created_at
+        if last_touch and last_touch < active_since:
+            continue
+        users.append(user)
+    return users
 
 
 async def apply_referral_milestones(session: AsyncSession, user_id: int) -> list[str]:

@@ -7,6 +7,7 @@ from db.models import User
 from db.repository import grant_unlimited, get_user, get_bot_stats
 from llm.provider_limits import get_provider_limits_text
 from llm.provider_status import get_openrouter_status, OPENROUTER_CREDITS_URL
+from bot.background.growth_tasks import send_daily_reminders, post_to_channel
 
 router = Router()
 
@@ -109,5 +110,33 @@ async def cmd_grant(message: Message, db_session: AsyncSession, db_user: User) -
         await message.answer(
             f"❌ User <code>{target_id}</code> not found.\n"
             f"They need to start the bot first with /start.",
+            parse_mode="HTML",
+        )
+
+
+@router.message(Command("remind"))
+async def cmd_remind(message: Message, db_user: User, bot) -> None:
+    """Manually trigger daily bonus reminders (admin only)."""
+    if db_user.id != ADMIN_ID:
+        return
+    await message.answer("⏳ Sending daily reminders...")
+    count = await send_daily_reminders(bot)
+    await message.answer(f"✅ Sent <b>{count}</b> daily reminders.", parse_mode="HTML")
+
+
+@router.message(Command("channelpost"))
+async def cmd_channelpost(message: Message, db_user: User, bot) -> None:
+    """Post promo message to configured channel (admin only)."""
+    if db_user.id != ADMIN_ID:
+        return
+    parts = message.text.split()
+    template_idx = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else None
+    ok = await post_to_channel(bot, template_index=template_idx)
+    if ok:
+        await message.answer("✅ Channel post published.", parse_mode="HTML")
+    else:
+        await message.answer(
+            "❌ Failed to post. Check <code>PROMO_CHANNEL_ID</code> in .env "
+            "and that the bot is admin in the channel.",
             parse_mode="HTML",
         )

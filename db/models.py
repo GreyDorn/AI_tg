@@ -23,6 +23,7 @@ class User(Base):
     waiting_for_music: Mapped[bool] = mapped_column(Boolean, default=False)
     referred_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"))
     daily_credits_claimed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    daily_reminder_sent_at: Mapped[datetime | None] = mapped_column(DateTime)
     referral_milestone_level: Mapped[int] = mapped_column(Integer, default=0)
     login_streak: Mapped[int] = mapped_column(Integer, default=0)
     last_active_date: Mapped[datetime | None] = mapped_column(DateTime)

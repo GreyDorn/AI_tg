@@ -1,4 +1,5 @@
 from typing import Callable, Awaitable, Any
+from datetime import datetime
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject, Update
 from config import resolve_model_key
@@ -40,6 +41,10 @@ class UserMiddleware(BaseMiddleware):
             )
 
             if not is_new:
+                now = datetime.now()
+                if not user.last_active_date or user.last_active_date.date() != now.date():
+                    user.last_active_date = now
+                    await session.commit()
                 await claim_daily_credits(session, tg_user.id)
                 await session.refresh(user)
 

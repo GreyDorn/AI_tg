@@ -12,6 +12,7 @@ from llm.provider_status import (
     start_openrouter_probe_loop,
     configure_openrouter_notifications,
 )
+from bot.background.growth_tasks import start_growth_background_tasks
 from bot.middlewares.user import UserMiddleware
 from bot.middlewares.ratelimit import RateLimitMiddleware
 from bot.middlewares.processing_lock import ProcessingLockMiddleware
@@ -45,6 +46,7 @@ async def main() -> None:
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     configure_openrouter_notifications(bot, ADMIN_ID)
     start_openrouter_probe_loop()
+    start_growth_background_tasks(bot)
     dp = Dispatcher()
 
     # Выдаём безлимит администратору

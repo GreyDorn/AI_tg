@@ -277,3 +277,10 @@ OPENROUTER_PROBE_INTERVAL: int = int(os.getenv("OPENROUTER_PROBE_INTERVAL", "180
 DEEPSEEK_API_KEY: str = os.getenv("DEEPSEEK_API_KEY", "")
 POLLINATIONS_API_KEY: str = os.getenv("POLLINATIONS_API_KEY", "")
 DATABASE_URL: str = "sqlite+aiosqlite:///bot.db"
+
+# Growth automation
+DAILY_REMINDER_ENABLED: bool = os.getenv("DAILY_REMINDER_ENABLED", "true").lower() in ("1", "true", "yes")
+DAILY_REMINDER_HOUR_UTC: int = int(os.getenv("DAILY_REMINDER_HOUR_UTC", "9"))
+CHANNEL_POST_ENABLED: bool = os.getenv("CHANNEL_POST_ENABLED", "false").lower() in ("1", "true", "yes")
+PROMO_CHANNEL_ID: str = os.getenv("PROMO_CHANNEL_ID", "").strip()  # @channel or -100...
+CHANNEL_POST_INTERVAL: int = int(os.getenv("CHANNEL_POST_INTERVAL", "86400"))  # seconds, default 24h
