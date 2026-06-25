@@ -1,6 +1,6 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from config import MODELS, DEFAULT_MODEL, SUBSCRIPTION_PRICE_STARS, PREMIUM_BOT_STARS_URL
+from config import MODELS, DEFAULT_MODEL, SUBSCRIPTION_PRICE_STARS, STARS_TOPUP_URL
 from llm.provider_status import get_available_image_models, get_available_music_models
 from llm.music_gen import is_music_feature_enabled
 
@@ -75,7 +75,7 @@ def cancel_music_keyboard() -> InlineKeyboardMarkup:
 def _buy_stars_button() -> InlineKeyboardButton:
     return InlineKeyboardButton(
         text=f"⭐ Buy Stars — from {SUBSCRIPTION_PRICE_STARS}",
-        url=PREMIUM_BOT_STARS_URL,
+        url=STARS_TOPUP_URL,
     )
 
 
