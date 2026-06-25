@@ -25,14 +25,16 @@ RSYNC_OPTS=(-avz --delete
 
 if [[ -n "${SSHPASS:-}" ]] && command -v sshpass >/dev/null 2>&1; then
   RSYNC_CMD=(sshpass -e rsync)
-  SSH_CMD=(sshpass -e ssh -o StrictHostKeyChecking=no)
+  RSYNC_SSH=(sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
+  SSH_CMD=(sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
 else
   RSYNC_CMD=(rsync)
-  SSH_CMD=(ssh)
+  RSYNC_SSH=(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
+  SSH_CMD=(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
 fi
 
 echo "Deploying ${ROOT_DIR}/ -> ${REMOTE}:${REMOTE_DIR}/"
-"${RSYNC_CMD[@]}" "${RSYNC_OPTS[@]}" "${ROOT_DIR}/" "${REMOTE}:${REMOTE_DIR}/"
+"${RSYNC_CMD[@]}" -e "${RSYNC_SSH[*]}" "${RSYNC_OPTS[@]}" "${ROOT_DIR}/" "${REMOTE}:${REMOTE_DIR}/"
 
 echo "Running DB migration and restarting ${SERVICE_NAME}..."
 "${SSH_CMD[@]}" "${REMOTE}" bash -s <<EOF
