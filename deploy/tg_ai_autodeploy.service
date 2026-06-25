@@ -1,0 +1,7 @@
+[Unit]
+Description=Telegram AI Bot auto-deploy from GitHub main
+
+[Service]
+Type=oneshot
+Environment=APP_DIR=/root/tg_AI
+ExecStart=/bin/bash /root/tg_AI/scripts/server-auto-deploy.sh
