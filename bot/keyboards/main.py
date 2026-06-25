@@ -1,6 +1,6 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from config import MODELS, DEFAULT_MODEL, SUBSCRIPTION_PRICE_STARS, STARS_TOPUP_URL
+from config import MODELS, DEFAULT_MODEL, SUBSCRIPTION_PRICE_STARS, PREMIUM_BOT_STARS_URL
 from llm.provider_status import get_available_image_models, get_available_music_models
 from llm.music_gen import is_music_feature_enabled
 
@@ -72,16 +72,28 @@ def cancel_music_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+def _buy_stars_button() -> InlineKeyboardButton:
+    return InlineKeyboardButton(
+        text=f"⭐ Buy Stars — from {SUBSCRIPTION_PRICE_STARS}",
+        url=PREMIUM_BOT_STARS_URL,
+    )
+
+
+def _subscribe_button() -> InlineKeyboardButton:
+    return InlineKeyboardButton(
+        text=f"💎 Subscribe — {SUBSCRIPTION_PRICE_STARS} ⭐",
+        callback_data="subscribe",
+    )
+
+
 def referral_keyboard(bot_username: str, user_id: int) -> InlineKeyboardMarkup:
     from bot.utils.growth import share_url
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="📤 Share bot", url=share_url(bot_username, user_id))],
-            [InlineKeyboardButton(
-                text=f"💎 Subscribe — {SUBSCRIPTION_PRICE_STARS} ⭐",
-                callback_data="subscribe",
-            )],
+            [_buy_stars_button()],
+            [_subscribe_button()],
         ]
     )
 
@@ -92,10 +104,8 @@ def growth_keyboard(bot_username: str, user_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="📤 Share bot (+3 req)", url=share_url(bot_username, user_id))],
-            [InlineKeyboardButton(
-                text=f"💎 Subscribe — {SUBSCRIPTION_PRICE_STARS} ⭐",
-                callback_data="subscribe",
-            )],
+            [_buy_stars_button()],
+            [_subscribe_button()],
         ]
     )
 
@@ -103,13 +113,7 @@ def growth_keyboard(bot_username: str, user_id: int) -> InlineKeyboardMarkup:
 def subscription_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(
-                text=f"Buy Stars — from {SUBSCRIPTION_PRICE_STARS} ⭐",
-                url=STARS_TOPUP_URL,
-            )],
-            [InlineKeyboardButton(
-                text=f"Subscribe — {SUBSCRIPTION_PRICE_STARS} ⭐",
-                callback_data="subscribe",
-            )],
+            [_buy_stars_button()],
+            [_subscribe_button()],
         ]
     )

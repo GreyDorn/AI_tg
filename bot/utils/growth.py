@@ -31,7 +31,8 @@ def out_of_credits_text(credits: int) -> str:
         f"• Tomorrow — <b>+{DAILY_FREE_CREDITS}</b> daily requests 🎁\n"
         f"• Invite a friend — <b>+{REFERRAL_BONUS_CREDITS}</b> per signup 👥\n\n"
         f"<b>Or unlimited access:</b>\n"
-        f"💎 <b>{SUBSCRIPTION_PRICE_STARS} ⭐/month</b> — all models, no daily limits"
+        f"1. Tap <b>⭐ Buy Stars</b> (PremiumBot opens inline)\n"
+        f"2. Then tap <b>💎 Subscribe</b> — <b>{SUBSCRIPTION_PRICE_STARS} ⭐/month</b>"
     )
 
 
@@ -65,7 +66,8 @@ def balance_free_tier_text(credits: int, daily_added: bool) -> str:
         f"<b>Free ways to get more:</b>\n"
         f"• <b>+{DAILY_FREE_CREDITS}</b> every day — open 💰 Balance\n"
         f"• <b>+{REFERRAL_BONUS_CREDITS}</b> per friend — 👥 Referral\n\n"
-        f"💎 Unlimited: <b>{SUBSCRIPTION_PRICE_STARS} ⭐/month</b> — all models, no limits"
+        f"💎 Unlimited: <b>{SUBSCRIPTION_PRICE_STARS} ⭐/month</b>\n"
+        f"Tap <b>⭐ Buy Stars</b> then <b>💎 Subscribe</b> below"
     )
 
 
