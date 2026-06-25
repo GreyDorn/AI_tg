@@ -24,9 +24,10 @@ RSYNC_OPTS=(-avz --delete
 )
 
 if [[ -n "${SSHPASS:-}" ]] && command -v sshpass >/dev/null 2>&1; then
-  RSYNC_CMD=(sshpass -e rsync)
-  RSYNC_SSH=(sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
-  SSH_CMD=(sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
+  # Cursor sets SSH_ASKPASS vars that break sshpass; unset them for deploy.
+  RSYNC_CMD=(env -u SSH_ASKPASS -u SSH_ASKPASS_REQUIRE -u DISPLAY sshpass -e rsync)
+  RSYNC_SSH=(env -u SSH_ASKPASS -u SSH_ASKPASS_REQUIRE -u DISPLAY sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o PreferredAuthentications=password -o PubkeyAuthentication=no)
+  SSH_CMD=(env -u SSH_ASKPASS -u SSH_ASKPASS_REQUIRE -u DISPLAY sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o PreferredAuthentications=password -o PubkeyAuthentication=no)
 else
   RSYNC_CMD=(rsync)
   RSYNC_SSH=(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
