@@ -6,7 +6,7 @@ from config import REFERRAL_BONUS_CREDITS
 from db.models import User
 from db.repository import claim_daily_credits
 from bot.keyboards.main import referral_keyboard, growth_keyboard
-from bot.utils.growth import balance_free_tier_text, referral_link, referral_program_text
+from bot.utils.growth import balance_free_tier_text
 
 router = Router()
 
@@ -14,7 +14,7 @@ router = Router()
 @router.message(Command("balance"))
 @router.message(F.text == "💰 Balance")
 async def cmd_balance(message: Message, db_session: AsyncSession, db_user: User) -> None:
-    got_daily = await claim_daily_credits(db_session, db_user.id)
+    got_daily, streak_bonus = await claim_daily_credits(db_session, db_user.id)
     await db_session.refresh(db_user)
 
     if db_user.has_unlimited_access:
@@ -36,20 +36,9 @@ async def cmd_balance(message: Message, db_session: AsyncSession, db_user: User)
     else:
         bot_info = await message.bot.get_me()
         await message.answer(
-            balance_free_tier_text(db_user.credits, got_daily),
+            balance_free_tier_text(
+                db_user.credits, got_daily, streak_bonus, db_user.login_streak,
+            ),
             parse_mode="HTML",
             reply_markup=growth_keyboard(bot_info.username, db_user.id),
         )
-
-
-@router.message(Command("referral"))
-@router.message(F.text == "👥 Referral")
-async def cmd_referral(message: Message, db_user: User, bot) -> None:
-    bot_info = await bot.get_me()
-    ref_link = referral_link(bot_info.username, db_user.id)
-
-    await message.answer(
-        referral_program_text(ref_link),
-        parse_mode="HTML",
-        reply_markup=referral_keyboard(bot_info.username, db_user.id),
-    )

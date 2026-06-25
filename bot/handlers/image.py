@@ -4,12 +4,12 @@ from aiogram import Router, F
 from aiogram.filters import Command, CommandObject, BaseFilter
 from aiogram.types import Message, BufferedInputFile, CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
-from config import IMAGE_MODELS
+from config import IMAGE_MODELS, IMAGE_VIRAL_FOOTER
 from db.models import User
 from db.repository import spend_credits, update_user_image_model, set_waiting_for_image
 from llm.image_gen import generate_image, ImageGenerationError
 from llm.provider_status import resolve_image_model_key
-from bot.keyboards.main import image_models_keyboard, cancel_keyboard
+from bot.keyboards.main import image_models_keyboard, cancel_keyboard, image_share_keyboard
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -184,7 +184,9 @@ async def _generate_and_send(
             return
 
     ext = _extension_for_mime(mime_type)
-    caption = f"🎨 {model_cfg.name}\n{prompt[:850]}"
+    bot_info = await message.bot.get_me()
+    viral = IMAGE_VIRAL_FOOTER.format(bot_username=bot_info.username)
+    caption = f"🎨 {model_cfg.name}\n{prompt[:800]}{viral}"
 
     try:
         await status.delete()
@@ -195,6 +197,7 @@ async def _generate_and_send(
         await message.answer_photo(
             BufferedInputFile(image_bytes, filename=f"image.{ext}"),
             caption=caption,
+            reply_markup=image_share_keyboard(bot_info.username, db_user.id),
         )
     except Exception:
         logger.exception("Failed to send photo user=%s model=%s", db_user.id, model_key)

@@ -23,6 +23,9 @@ class User(Base):
     waiting_for_music: Mapped[bool] = mapped_column(Boolean, default=False)
     referred_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"))
     daily_credits_claimed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    referral_milestone_level: Mapped[int] = mapped_column(Integer, default=0)
+    login_streak: Mapped[int] = mapped_column(Integer, default=0)
+    last_active_date: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     conversations: Mapped[list["Conversation"]] = relationship(back_populates="user")

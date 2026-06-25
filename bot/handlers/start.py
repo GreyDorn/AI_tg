@@ -1,15 +1,29 @@
+import logging
 from aiogram import Router
 from aiogram.filters import CommandStart, Command
 from aiogram.types import Message
+from aiogram.exceptions import TelegramForbiddenError
 from sqlalchemy.ext.asyncio import AsyncSession
 from config import FREE_CREDITS_ON_START, DAILY_FREE_CREDITS, REFERRAL_BONUS_CREDITS, SUBSCRIPTION_PRICE_STARS, IMAGE_MODELS, MUSIC_MODELS, MODELS
 from llm.music_gen import is_music_feature_enabled
 from db.models import User
-from db.repository import create_conversation, clear_waiting_modes
+from db.repository import (
+    create_conversation,
+    clear_waiting_modes,
+    count_referrals,
+    apply_referral_milestones,
+    get_user,
+)
 from bot.keyboards.main import main_menu, growth_keyboard
-from bot.utils.growth import referral_link, referral_program_text
+from bot.utils.growth import (
+    referral_link,
+    invite_dashboard_text,
+    new_referrer_notification_text,
+    milestone_unlocked_text,
+)
 
 router = Router()
+logger = logging.getLogger(__name__)
 
 
 @router.message(CommandStart())
@@ -21,7 +35,8 @@ async def cmd_start(
 ) -> None:
     bot_info = await message.bot.get_me()
     ref_line = (
-        f"\n\n👥 Invite friends → <b>+{REFERRAL_BONUS_CREDITS} requests</b> each via 👥 Referral"
+        f"\n\n👥 Invite friends → <b>+{REFERRAL_BONUS_CREDITS} requests</b> each "
+        f"(milestones up to 1 month free) → /invite"
     )
     welcome_extra = ""
     if is_new_user and db_user.referred_by:
@@ -53,12 +68,50 @@ async def cmd_start(
     if is_new_user:
         ref_link = referral_link(bot_info.username, db_user.id)
         await message.answer(
-            referral_program_text(ref_link),
+            invite_dashboard_text(ref_link, 0, db_user.credits, 0),
             parse_mode="HTML",
             reply_markup=growth_keyboard(bot_info.username, db_user.id),
         )
 
+        if db_user.referred_by:
+            await _notify_referrer(
+                message, db_session, db_user.referred_by, message.from_user.first_name,
+            )
+
     await create_conversation(db_session, db_user.id, db_user.current_model)
+
+
+async def _notify_referrer(
+    message: Message,
+    db_session: AsyncSession,
+    referrer_id: int,
+    friend_name: str,
+) -> None:
+    try:
+        rewards = await apply_referral_milestones(db_session, referrer_id)
+        referrer = await get_user(db_session, referrer_id)
+        if not referrer:
+            return
+        await db_session.refresh(referrer)
+        ref_count = await count_referrals(db_session, referrer_id)
+        await message.bot.send_message(
+            referrer_id,
+            new_referrer_notification_text(friend_name, ref_count, referrer.credits),
+            parse_mode="HTML",
+            reply_markup=growth_keyboard(
+                (await message.bot.get_me()).username, referrer_id,
+            ),
+        )
+        if rewards:
+            await message.bot.send_message(
+                referrer_id,
+                milestone_unlocked_text(rewards),
+                parse_mode="HTML",
+            )
+    except TelegramForbiddenError:
+        logger.info("Referrer %s blocked the bot — skip notification", referrer_id)
+    except Exception:
+        logger.exception("Failed to notify referrer %s", referrer_id)
 
 
 @router.message(Command("help"))
@@ -106,7 +159,8 @@ async def cmd_help(message: Message) -> None:
         f"<b>Free requests:</b>\n"
         f"• {FREE_CREDITS_ON_START} requests on registration\n"
         f"• +{DAILY_FREE_CREDITS} every day\n"
-        f"• +{REFERRAL_BONUS_CREDITS} for each referred friend\n\n"
+        f"• +{REFERRAL_BONUS_CREDITS} for each referred friend (milestones → free unlimited)\n"
+        f"• Leaderboard: /top\n\n"
         f"💎 <b>Unlimited subscription</b> — {SUBSCRIPTION_PRICE_STARS} ⭐ per month",
         parse_mode="HTML",
     )

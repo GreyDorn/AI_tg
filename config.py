@@ -231,7 +231,23 @@ RATE_LIMIT_WINDOW = 60      # per N seconds
 # Free requests
 FREE_CREDITS_ON_START = 5       # on registration
 DAILY_FREE_CREDITS = 2          # every day
-REFERRAL_BONUS_CREDITS = 3      # per referral
+REFERRAL_BONUS_CREDITS = 5      # per referral (was 3 — stronger viral incentive)
+
+# Login streak: extra daily bonus after N consecutive days
+STREAK_BONUS_START = 3          # bonus starts on day 3
+STREAK_BONUS_MAX = 5            # max extra requests per day from streak
+
+# Referral milestones: (friends invited, reward_type, amount, label)
+# reward_type: "credits" | "days" (subscription days)
+REFERRAL_MILESTONES = [
+    (3, "credits", 15, "+15 bonus requests"),
+    (10, "days", 3, "3 days unlimited"),
+    (25, "days", 7, "7 days unlimited"),
+    (50, "days", 30, "1 month unlimited"),
+]
+
+# Viral: append to generated image captions (use {bot_username} placeholder)
+IMAGE_VIRAL_FOOTER = "\n\n✨ Free AI art → @{bot_username}"
 
 # Dialog context
 MAX_CONTEXT_MESSAGES = 30

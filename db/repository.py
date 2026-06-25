@@ -3,7 +3,15 @@ from dataclasses import dataclass
 from sqlalchemy import select, delete, text, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from config import DATABASE_URL, FREE_CREDITS_ON_START, DAILY_FREE_CREDITS, REFERRAL_BONUS_CREDITS
+from config import (
+    DATABASE_URL,
+    FREE_CREDITS_ON_START,
+    DAILY_FREE_CREDITS,
+    REFERRAL_BONUS_CREDITS,
+    REFERRAL_MILESTONES,
+    STREAK_BONUS_START,
+    STREAK_BONUS_MAX,
+)
 from db.models import Base, User, Conversation, Message, Payment
 
 
@@ -21,6 +29,9 @@ async def init_db() -> None:
             "ALTER TABLE users ADD COLUMN waiting_for_image INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE users ADD COLUMN current_music_model VARCHAR(64) NOT NULL DEFAULT 'elevenmusic-free'",
             "ALTER TABLE users ADD COLUMN waiting_for_music INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN referral_milestone_level INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN login_streak INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN last_active_date DATETIME",
         ]:
             try:
                 await conn.execute(text(column_sql))
@@ -135,18 +146,34 @@ async def add_credits(session: AsyncSession, user_id: int, amount: int) -> int:
     return user.credits
 
 
-async def claim_daily_credits(session: AsyncSession, user_id: int) -> bool:
-    """Начисляет ежедневные кредиты. Возвращает False если уже получены сегодня."""
+async def claim_daily_credits(session: AsyncSession, user_id: int) -> tuple[bool, int]:
+    """Начисляет ежедневные кредиты + streak bonus. Returns (was_claimed, bonus_added)."""
     user = await session.get(User, user_id)
     if not user:
-        return False
+        return False, 0
     today = date.today()
     if user.daily_credits_claimed_at and user.daily_credits_claimed_at.date() == today:
-        return False
-    user.credits += DAILY_FREE_CREDITS
+        return False, 0
+
+    yesterday = today - timedelta(days=1)
+    if user.last_active_date:
+        last_day = user.last_active_date.date()
+        if last_day == yesterday:
+            user.login_streak += 1
+        elif last_day < yesterday:
+            user.login_streak = 1
+    else:
+        user.login_streak = 1
+
+    streak_bonus = 0
+    if user.login_streak >= STREAK_BONUS_START:
+        streak_bonus = min(user.login_streak - STREAK_BONUS_START + 1, STREAK_BONUS_MAX)
+
+    user.credits += DAILY_FREE_CREDITS + streak_bonus
     user.daily_credits_claimed_at = datetime.now()
+    user.last_active_date = datetime.now()
     await session.commit()
-    return True
+    return True, streak_bonus
 
 
 # ── Conversations ──────────────────────────────────────────────────────────────
@@ -271,6 +298,71 @@ async def process_subscription_payment(
         raise
 
     return PaymentResult(subscription_until=subscription_until, is_duplicate=False)
+
+
+# ── Referral growth ───────────────────────────────────────────────────────────
+
+async def count_referrals(session: AsyncSession, user_id: int) -> int:
+    result = await session.execute(
+        select(func.count()).select_from(User).where(User.referred_by == user_id)
+    )
+    return int(result.scalar_one() or 0)
+
+
+async def apply_referral_milestones(session: AsyncSession, user_id: int) -> list[str]:
+    """Grant newly unlocked referral milestone rewards. Returns list of reward labels."""
+    user = await session.get(User, user_id)
+    if not user:
+        return []
+
+    ref_count = await count_referrals(session, user_id)
+    granted: list[str] = []
+
+    for i, (needed, reward_type, amount, label) in enumerate(REFERRAL_MILESTONES):
+        if i < user.referral_milestone_level:
+            continue
+        if ref_count < needed:
+            break
+        if reward_type == "credits":
+            user.credits += amount
+        elif reward_type == "days":
+            user.subscription_until = _extend_subscription(user, amount)
+        user.referral_milestone_level = i + 1
+        granted.append(label)
+
+    if granted:
+        await session.commit()
+    return granted
+
+
+@dataclass
+class LeaderboardEntry:
+    user_id: int
+    full_name: str
+    username: str | None
+    referrals: int
+
+
+async def get_referral_leaderboard(session: AsyncSession, limit: int = 10) -> list[LeaderboardEntry]:
+    subq = (
+        select(User.referred_by.label("referrer_id"), func.count().label("cnt"))
+        .where(User.referred_by.is_not(None))
+        .group_by(User.referred_by)
+        .order_by(func.count().desc())
+        .limit(limit)
+    )
+    rows = (await session.execute(subq)).all()
+    entries: list[LeaderboardEntry] = []
+    for referrer_id, cnt in rows:
+        referrer = await session.get(User, referrer_id)
+        if referrer:
+            entries.append(LeaderboardEntry(
+                user_id=referrer.id,
+                full_name=referrer.full_name,
+                username=referrer.username,
+                referrals=int(cnt),
+            ))
+    return entries
 
 
 # ── Admin stats ───────────────────────────────────────────────────────────────

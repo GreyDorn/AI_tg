@@ -103,9 +103,19 @@ def growth_keyboard(bot_username: str, user_id: int) -> InlineKeyboardMarkup:
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="📤 Share bot (+3 req)", url=share_url(bot_username, user_id))],
+            [InlineKeyboardButton(text="📤 Share bot (+5 req)", url=share_url(bot_username, user_id))],
             [_buy_stars_button()],
             [_subscribe_button()],
+        ]
+    )
+
+
+def image_share_keyboard(bot_username: str, user_id: int) -> InlineKeyboardMarkup:
+    from bot.utils.growth import image_share_url
+
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="📤 Share this bot", url=image_share_url(bot_username, user_id))],
         ]
     )
 

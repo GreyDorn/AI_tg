@@ -15,7 +15,7 @@ from llm.provider_status import (
 from bot.middlewares.user import UserMiddleware
 from bot.middlewares.ratelimit import RateLimitMiddleware
 from bot.middlewares.processing_lock import ProcessingLockMiddleware
-from bot.handlers import start, chat, models, balance, admin, payment, image, image_models, music, music_models
+from bot.handlers import start, chat, models, balance, admin, payment, image, image_models, music, music_models, invite
 
 sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
@@ -58,6 +58,7 @@ async def main() -> None:
 
     # Роутеры (порядок важен: chat последним, так как он ловит все тексты)
     dp.include_router(start.router)
+    dp.include_router(invite.router)
     dp.include_router(models.router)
     dp.include_router(balance.router)
     dp.include_router(admin.router)
