@@ -9,21 +9,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Rsync to VPS
-        uses: burnett01/rsync-deployments@7.0.1
-        with:
-          switches: -avzr --delete --exclude .git/ --exclude venv/ --exclude .env --exclude bot.db --exclude __pycache__/ --exclude .deployed_sha
-          path: ./
-          remote_path: ${{ secrets.DEPLOY_APP_DIR || '/root/tg_AI' }}/
-          remote_host: ${{ secrets.DEPLOY_HOST }}
-          remote_user: ${{ secrets.DEPLOY_USER }}
-          remote_key: ${{ secrets.DEPLOY_SSH_KEY }}
-          remote_password: ${{ secrets.DEPLOY_PASSWORD }}
-
-      - name: Restart bot
+      - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.DEPLOY_HOST }}
@@ -33,11 +19,4 @@ jobs:
           script: |
             export APP_DIR="${{ secrets.DEPLOY_APP_DIR || '/root/tg_AI' }}"
             export SERVICE_NAME="${{ secrets.DEPLOY_SERVICE_NAME || 'tg_ai_bot.service' }}"
-            cd "$APP_DIR"
-            if [[ -f venv/bin/activate ]]; then
-              source venv/bin/activate
-            fi
-            python3 -m pip install -q -r requirements.txt
-            python3 -c "import asyncio; from db.repository import init_db; asyncio.run(init_db())"
-            systemctl restart "$SERVICE_NAME"
-            systemctl is-active "$SERVICE_NAME"
+            bash "$APP_DIR/scripts/server-auto-deploy.sh"
