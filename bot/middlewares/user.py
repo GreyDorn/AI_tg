@@ -44,4 +44,5 @@ class UserMiddleware(BaseMiddleware):
 
             data["db_session"] = session
             data["db_user"] = user
+            data["is_new_user"] = is_new
             return await handler(event, data)

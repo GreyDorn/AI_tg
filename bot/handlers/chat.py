@@ -17,6 +17,7 @@ from db.repository import (
 from llm import get_llm
 from bot.keyboards.main import models_keyboard
 from bot.utils.formatting import format_model_text
+from bot.utils.growth import answer_out_of_credits, answer_low_credits_hint
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -59,13 +60,7 @@ async def handle_message(message: Message, db_session: AsyncSession, db_user: Us
     model_cfg = MODELS[model_key]
 
     if db_user.credits < model_cfg.cost_per_message and not db_user.has_unlimited_access:
-        await message.answer(
-            f"❌ <b>Out of requests</b>\n\n"
-            f"You have: <b>{db_user.credits}</b>\n\n"
-            f"Come back tomorrow for free requests 🎁\n"
-            f"Or get unlimited access → /buy",
-            parse_mode="HTML",
-        )
+        await answer_out_of_credits(message, db_user)
         return
 
     conv = await get_active_conversation(db_session, db_user.id)
@@ -82,13 +77,7 @@ async def handle_message(message: Message, db_session: AsyncSession, db_user: Us
         if await spend_credits(db_session, db_user.id, model_cfg.cost_per_message):
             credits_spent = model_cfg.cost_per_message
         else:
-            await message.answer(
-                f"❌ <b>Out of requests</b>\n\n"
-                f"You have: <b>{db_user.credits}</b>\n\n"
-                f"Come back tomorrow for free requests 🎁\n"
-                f"Or get unlimited access → /buy",
-                parse_mode="HTML",
-            )
+            await answer_out_of_credits(message, db_user)
             return
 
     await message.bot.send_chat_action(message.chat.id, "typing")
@@ -170,3 +159,8 @@ async def handle_message(message: Message, db_session: AsyncSession, db_user: Us
         return
 
     await add_message(db_session, conv.id, "assistant", full_response)
+
+    if not db_user.has_unlimited_access:
+        await db_session.refresh(db_user)
+        if db_user.credits in (1, 2):
+            await answer_low_credits_hint(message, db_user, db_user.credits)
