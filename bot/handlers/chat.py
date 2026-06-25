@@ -20,6 +20,7 @@ from llm import get_llm
 from llm.gemini import GeminiLLM, VISION_UNAVAILABLE_MSG
 from bot.keyboards.main import models_keyboard
 from bot.utils.formatting import format_model_text
+from bot.utils.growth import answer_out_of_credits, answer_low_credits_hint
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -226,17 +227,16 @@ async def _reply_streaming(
 
     await add_message(db_session, conv_id, "assistant", full_response)
 
+    if not vision_mode and not db_user.has_unlimited_access:
+        await db_session.refresh(db_user)
+        if db_user.credits in (1, 2):
+            await answer_low_credits_hint(message, db_user, db_user.credits)
+
 
 async def _ensure_credits(message: Message, db_user: User, cost: int) -> bool:
     if db_user.has_unlimited_access or db_user.credits >= cost:
         return True
-    await message.answer(
-        f"❌ <b>Out of requests</b>\n\n"
-        f"You have: <b>{db_user.credits}</b>\n\n"
-        f"Come back tomorrow for free requests 🎁\n"
-        f"Or get unlimited access → /buy",
-        parse_mode="HTML",
-    )
+    await answer_out_of_credits(message, db_user)
     return False
 
 
@@ -275,13 +275,7 @@ async def handle_message(message: Message, db_session: AsyncSession, db_user: Us
         if await spend_credits(db_session, db_user.id, model_cfg.cost_per_message):
             credits_spent = model_cfg.cost_per_message
         else:
-            await message.answer(
-                f"❌ <b>Out of requests</b>\n\n"
-                f"You have: <b>{db_user.credits}</b>\n\n"
-                f"Come back tomorrow for free requests 🎁\n"
-                f"Or get unlimited access → /buy",
-                parse_mode="HTML",
-            )
+            await answer_out_of_credits(message, db_user)
             return
 
     await message.bot.send_chat_action(message.chat.id, "typing")
@@ -346,13 +340,7 @@ async def handle_photo(message: Message, db_session: AsyncSession, db_user: User
             credits_spent = vision_cfg.cost_per_message
         else:
             await _revert_auto_switched_model(db_session, db_user, revert_model_key)
-            await message.answer(
-                f"❌ <b>Out of requests</b>\n\n"
-                f"You have: <b>{db_user.credits}</b>\n\n"
-                f"Come back tomorrow for free requests 🎁\n"
-                f"Or get unlimited access → /buy",
-                parse_mode="HTML",
-            )
+            await answer_out_of_credits(message, db_user)
             return
 
     try:

@@ -73,10 +73,29 @@ def cancel_music_keyboard() -> InlineKeyboardMarkup:
 
 
 def referral_keyboard(bot_username: str, user_id: int) -> InlineKeyboardMarkup:
-    ref_link = f"https://t.me/{bot_username}?start=ref{user_id}"
+    from bot.utils.growth import share_url
+
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="📤 Share Link", url=f"https://t.me/share/url?url={ref_link}&text=Try%20this%20AI%20bot!")]
+            [InlineKeyboardButton(text="📤 Share bot", url=share_url(bot_username, user_id))],
+            [InlineKeyboardButton(
+                text=f"💎 Subscribe — {SUBSCRIPTION_PRICE_STARS} ⭐",
+                callback_data="subscribe",
+            )],
+        ]
+    )
+
+
+def growth_keyboard(bot_username: str, user_id: int) -> InlineKeyboardMarkup:
+    from bot.utils.growth import share_url
+
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="📤 Share bot (+3 req)", url=share_url(bot_username, user_id))],
+            [InlineKeyboardButton(
+                text=f"💎 Subscribe — {SUBSCRIPTION_PRICE_STARS} ⭐",
+                callback_data="subscribe",
+            )],
         ]
     )
 

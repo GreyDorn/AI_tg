@@ -1,6 +1,8 @@
 name: Deploy
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -13,7 +15,8 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          password: ${{ secrets.DEPLOY_PASSWORD }}
           script: |
             export APP_DIR="${{ secrets.DEPLOY_APP_DIR || '/root/tg_AI' }}"
             export SERVICE_NAME="${{ secrets.DEPLOY_SERVICE_NAME || 'tg_ai_bot.service' }}"
-            bash "$APP_DIR/scripts/deploy.sh"
+            bash "$APP_DIR/scripts/server-auto-deploy.sh"
