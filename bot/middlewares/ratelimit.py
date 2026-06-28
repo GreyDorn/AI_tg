@@ -4,6 +4,7 @@ from typing import Callable, Awaitable, Any
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject, Message
 from config import RATE_LIMIT_MESSAGES, RATE_LIMIT_WINDOW
+from bot.i18n import resolve_lang, t
 
 
 class RateLimitMiddleware(BaseMiddleware):
@@ -39,9 +40,9 @@ class RateLimitMiddleware(BaseMiddleware):
 
         if len(history) >= RATE_LIMIT_MESSAGES:
             wait_seconds = int(RATE_LIMIT_WINDOW - (now - history[0])) + 1
+            lang = resolve_lang(tg_user)
             await raw.answer(
-                f"⏱ <b>Too many requests</b>\n\n"
-                f"Please wait <b>{wait_seconds} sec.</b> before sending the next message.",
+                t("ratelimit", lang, seconds=wait_seconds),
                 parse_mode="HTML",
             )
             return

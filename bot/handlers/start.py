@@ -15,7 +15,7 @@ from db.repository import (
     get_user,
 )
 from bot.keyboards.main import main_menu, growth_keyboard
-from bot.i18n import t, button_filter, milestone_label, resolve_lang
+from bot.i18n import t, button_filter, format_cost, milestone_label, resolve_lang
 from bot.utils.growth import (
     referral_link,
     invite_dashboard_text,
@@ -112,53 +112,40 @@ async def _notify_referrer(
 
 
 @router.message(Command("help"))
-async def cmd_help(message: Message) -> None:
+async def cmd_help(message: Message, lang: str = "en") -> None:
     models_text = "\n".join(
         f"• <b>{m.name}</b> — {m.description}"
         for m in MODELS.values()
     )
     image_models_text = "\n".join(
         f"• <b>{m.name}</b> — {m.description}"
-        + (f" ({m.cost_per_image} req)" if m.cost_per_image else " (free)")
+        + (f" ({format_cost(m.cost_per_image, lang)})" if m.cost_per_image else f" ({format_cost(0, lang)})")
         for m in IMAGE_MODELS.values()
     )
-    music_models_text = ""
-    music_commands = ""
     music_section = ""
+    music_commands = ""
     if is_music_feature_enabled():
         music_models_text = "\n".join(
             f"• <b>{m.name}</b> — {m.description}"
-            + (f" ({m.cost_per_track} req)" if m.cost_per_track else " (free)")
+            + (f" ({format_cost(m.cost_per_track, lang)})" if m.cost_per_track else f" ({format_cost(0, lang)})")
             + f", ~{m.duration_seconds}s"
             for m in MUSIC_MODELS.values()
         )
-        music_commands = (
-            "/music — create music\n"
-            "/musicmodels — choose music model\n"
-        )
-        music_section = f"<b>Music models:</b>\n{music_models_text}\n\n"
+        music_commands = t("help_music_commands", lang)
+        music_section = t("help_music_section", lang, models=music_models_text)
     await message.answer(
-        f"<b>📚 Help</b>\n\n"
-        f"<b>Commands:</b>\n"
-        f"/start — main menu\n"
-        f"/newchat — start a new conversation\n"
-        f"/models — choose a text model\n"
-        f"/image — create an image\n"
-        f"/imagemodels — choose image model\n"
-        f"{music_commands}"
-        f"/balance — your request balance\n"
-        f"/buy — unlimited subscription\n"
-        f"/referral — referral program\n"
-        f"/help — this help message\n\n"
-        f"<b>Text models:</b>\n{models_text}\n\n"
-        f"<b>Image models:</b>\n{image_models_text}\n\n"
-        f"{music_section}"
-        f"<b>Free requests:</b>\n"
-        f"• {FREE_CREDITS_ON_START} requests on registration\n"
-        f"• +{DAILY_FREE_CREDITS} every day\n"
-        f"• +{REFERRAL_BONUS_CREDITS} for each referred friend (milestones → free unlimited)\n"
-        f"• Leaderboard: /top\n\n"
-        f"💎 <b>Unlimited subscription</b> — {SUBSCRIPTION_PRICE_STARS} ⭐ per month",
+        t(
+            "help",
+            lang,
+            music_commands=music_commands,
+            models_text=models_text,
+            image_models_text=image_models_text,
+            music_section=music_section,
+            free_start=FREE_CREDITS_ON_START,
+            daily=DAILY_FREE_CREDITS,
+            bonus=REFERRAL_BONUS_CREDITS,
+            price=SUBSCRIPTION_PRICE_STARS,
+        ),
         parse_mode="HTML",
     )
 

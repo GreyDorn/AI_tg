@@ -55,24 +55,27 @@ async def cmd_buy(message: Message, db_user: User, lang: str = "en") -> None:
 
 
 @router.callback_query(F.data == "subscribe")
-async def process_subscribe_callback(callback: CallbackQuery) -> None:
+async def process_subscribe_callback(callback: CallbackQuery, lang: str = "en") -> None:
     if not callback.message:
-        await callback.answer("Message not found. Try /buy again.", show_alert=True)
+        await callback.answer(t("pay_msg_not_found", lang), show_alert=True)
         return
 
     user_id = callback.from_user.id
     try:
         await callback.message.answer_invoice(
-            title="Unlimited Subscription — 30 days",
-            description=(
-                f"Unlimited text + image requests to all models for {SUBSCRIPTION_DAYS} days. "
-                f"Fair-use: {RATE_LIMIT_MESSAGES} messages per {RATE_LIMIT_WINDOW} sec."
+            title=t("pay_invoice_title", lang),
+            description=t(
+                "pay_invoice_desc",
+                lang,
+                days=SUBSCRIPTION_DAYS,
+                rate_limit=RATE_LIMIT_MESSAGES,
+                rate_window=RATE_LIMIT_WINDOW,
             ),
             payload=_subscription_payload(user_id),
             currency="XTR",
             prices=[
                 LabeledPrice(
-                    label=f"{SUBSCRIPTION_DAYS}-day Subscription",
+                    label=t("pay_invoice_label", lang, days=SUBSCRIPTION_DAYS),
                     amount=SUBSCRIPTION_PRICE_STARS,
                 )
             ],
@@ -80,18 +83,15 @@ async def process_subscribe_callback(callback: CallbackQuery) -> None:
         )
     except TelegramAPIError as exc:
         logger.exception("Failed to send Stars invoice for user=%s", user_id)
-        await callback.answer(
-            "Failed to create payment. Please try again later.",
-            show_alert=True,
-        )
+        await callback.answer(t("pay_create_failed", lang), show_alert=True)
         await callback.message.answer(
-            "❌ <b>Payment could not be started.</b>\n\n"
-            "If the error persists:\n"
-            "1. Make sure you have enough ⭐ on your balance "
-            f"(need {SUBSCRIPTION_PRICE_STARS} ⭐)\n"
-            "2. Tap <b>Buy Stars</b> in /buy to top up via PremiumBot\n"
-            "3. Write to /paysupport\n\n"
-            f"<i>Technical details: {exc.message}</i>",
+            t(
+                "pay_start_failed",
+                lang,
+                price=SUBSCRIPTION_PRICE_STARS,
+                details=exc.message,
+            ),
+            parse_mode="HTML",
         )
         return
 
@@ -99,11 +99,11 @@ async def process_subscribe_callback(callback: CallbackQuery) -> None:
 
 
 @router.pre_checkout_query()
-async def pre_checkout(query: PreCheckoutQuery) -> None:
+async def pre_checkout(query: PreCheckoutQuery, lang: str = "en") -> None:
     if not _is_subscription_payload(query.invoice_payload, query.from_user.id):
         await query.answer(
             ok=False,
-            error_message="Invalid order. Please start again with /buy.",
+            error_message=t("pay_invalid_order", lang),
         )
         return
 
@@ -122,10 +122,7 @@ async def successful_payment(
             message.from_user.id,
             payment.invoice_payload,
         )
-        await message.answer(
-            "Payment received, but the order could not be identified. "
-            "Please contact /paysupport."
-        )
+        await message.answer(t("pay_unknown_order", lang))
         return
 
     charge_id = payment.telegram_payment_charge_id
@@ -140,10 +137,7 @@ async def successful_payment(
 
     if not result.subscription_until:
         logger.error("Subscription payment failed: user=%s charge_id=%s", db_user.id, charge_id)
-        await message.answer(
-            "Payment received, but subscription could not be activated. "
-            "Please contact /paysupport."
-        )
+        await message.answer(t("pay_activation_failed", lang))
         return
 
     logger.info(
@@ -166,16 +160,8 @@ async def successful_payment(
 
 
 @router.message(Command("paysupport"))
-async def cmd_paysupport(message: Message) -> None:
+async def cmd_paysupport(message: Message, lang: str = "en") -> None:
     await message.answer(
-        "💬 <b>Payment Support</b>\n\n"
-        "If you have issues paying with Telegram Stars:\n\n"
-        f"1. You need at least <b>{SUBSCRIPTION_PRICE_STARS} ⭐</b> on your balance\n"
-        "2. Open /buy and tap <b>Buy Stars</b> — PremiumBot opens inline\n"
-        f"3. Alternative link: {PREMIUM_BOT_STARS_URL}\n"
-        "4. If you see <code>PROVIDER_ACCOUNT_INVALID</code>, "
-        "try another card or Telegram Desktop\n"
-        "5. After buying stars, tap <b>Subscribe</b> in /buy\n\n"
-        "If the problem persists, describe the error and send a screenshot here. "
-        "We will help manually.",
+        t("paysupport", lang, price=SUBSCRIPTION_PRICE_STARS, stars_url=PREMIUM_BOT_STARS_URL),
+        parse_mode="HTML",
     )

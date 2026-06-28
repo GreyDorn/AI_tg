@@ -6,14 +6,10 @@ from config import IMAGE_MODELS
 from db.models import User
 from db.repository import update_user_image_model, set_waiting_for_image
 from bot.keyboards.main import image_models_keyboard, cancel_keyboard
-from bot.i18n import button_filter, format_cost, resolve_lang
+from bot.i18n import button_filter, format_cost, t
 from llm.provider_status import get_available_image_models, resolve_image_model_key
 
 router = Router()
-
-
-def _format_cost(cost: int, lang: str) -> str:
-    return format_cost(cost, lang)
 
 
 async def _enable_image_waiting(db_session: AsyncSession, db_user: User) -> None:
@@ -24,9 +20,7 @@ async def _enable_image_waiting(db_session: AsyncSession, db_user: User) -> None
 
 async def _send_image_waiting_hint(target: Message, model_name: str, lang: str = "en") -> None:
     await target.answer(
-        f"🎨 <b>Ready to draw</b> — model: <b>{model_name}</b>\n\n"
-        f"Describe your image in the <b>next message</b>.\n"
-        f"Example: <code>astronaut cat on the Moon</code>",
+        t("image_models_ready", lang, model=model_name),
         parse_mode="HTML",
         reply_markup=cancel_keyboard(lang),
     )
@@ -52,13 +46,14 @@ async def _show_image_models(
     current = available[model_key]
     hidden_note = ""
     if len(available) < len(IMAGE_MODELS):
-        hidden_note = "\n\n<i>Premium image models are hidden until OpenRouter credits are available.</i>"
+        hidden_note = t("image_models_hidden", lang)
 
-    text = (
-        f"🖼 <b>Image Models</b>\n\n"
-        f"Current: <b>{current.name}</b> ({_format_cost(current.cost_per_image, lang)})\n\n"
-        f"Pick a model or just describe your image in the <b>next message</b> 👇"
-        f"{hidden_note}"
+    text = t(
+        "image_models_title",
+        lang,
+        model=current.name,
+        cost=format_cost(current.cost_per_image, lang),
+        hidden_note=hidden_note,
     )
     markup = image_models_keyboard(model_key, lang)
 
@@ -92,7 +87,7 @@ async def select_image_model(
     available = get_available_image_models()
 
     if model_key not in available:
-        await callback.answer("This model is currently unavailable.", show_alert=True)
+        await callback.answer(t("image_model_unavailable_alert", lang), show_alert=True)
         return
 
     already_selected = model_key == db_user.current_image_model
@@ -107,9 +102,11 @@ async def select_image_model(
 
     try:
         if already_selected:
-            await callback.answer(f"✅ {IMAGE_MODELS[model_key].name} — describe your image")
+            await callback.answer(
+                t("image_model_selected_describe", lang, model=IMAGE_MODELS[model_key].name),
+            )
         else:
-            await callback.answer(f"✅ {IMAGE_MODELS[model_key].name}")
+            await callback.answer(t("image_model_selected", lang, model=IMAGE_MODELS[model_key].name))
     except Exception:
         pass
 

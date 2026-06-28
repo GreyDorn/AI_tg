@@ -10,7 +10,7 @@ from db.repository import spend_credits, update_user_image_model, set_waiting_fo
 from llm.image_gen import generate_image, ImageGenerationError
 from llm.provider_status import resolve_image_model_key
 from bot.keyboards.main import image_models_keyboard, cancel_keyboard, image_share_keyboard
-from bot.i18n import all_menu_button_texts, button_filter, format_cost, image_viral_footer, resolve_lang
+from bot.i18n import all_menu_button_texts, button_filter, format_cost, image_viral_footer, resolve_lang, t
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -84,20 +84,9 @@ async def _show_image_help(message: Message, db_user: User, waiting: bool = Fals
     cost = _format_cost(model_cfg.cost_per_image, lang)
 
     if waiting:
-        text = (
-            f"🎨 <b>Describe your image in one message</b>\n\n"
-            f"Model: <b>{model_cfg.name}</b> ({cost})\n"
-            f"Example: <code>astronaut cat on the Moon</code>\n\n"
-            f"Change model → /imagemodels"
-        )
+        text = t("image_help_waiting", lang, model=model_cfg.name, cost=cost)
     else:
-        text = (
-            f"🎨 <b>Image Generation</b>\n\n"
-            f"Model: <b>{model_cfg.name}</b> ({cost})\n\n"
-            f"Send a command:\n"
-            f"<code>/image astronaut cat on the Moon</code>\n\n"
-            f"Change model → /imagemodels"
-        )
+        text = t("image_help", lang, model=model_cfg.name, cost=cost)
     await message.answer(
         text,
         parse_mode="HTML",
@@ -124,25 +113,28 @@ async def _generate_and_send(
         prompt[:120],
     )
 
+    lang = resolve_lang(db_user)
+
     if len(prompt) > 1000:
-        await message.answer("❌ Description is too long. Maximum 1000 characters.")
+        await message.answer(t("image_prompt_too_long", lang))
         return
 
-    lang = resolve_lang(db_user)
     if cost > 0 and db_user.credits < cost and not db_user.has_unlimited_access:
         await message.answer(
-            f"❌ <b>Not enough requests</b>\n\n"
-            f"<b>{model_cfg.name}</b> costs <b>{cost}</b> requests.\n"
-            f"You have: <b>{db_user.credits}</b>\n\n"
-            f"Try a free model → /imagemodels\n"
-            f"Unlimited access → /buy",
+            t(
+                "image_not_enough",
+                lang,
+                model=model_cfg.name,
+                cost=cost,
+                credits=db_user.credits,
+            ),
             parse_mode="HTML",
             reply_markup=image_models_keyboard(model_key, lang),
         )
         return
 
     status = await message.answer(
-        f"🎨 Drawing with <b>{model_cfg.name}</b>... Please wait 10–40 sec.",
+        t("image_drawing", lang, model=model_cfg.name),
         parse_mode="HTML",
     )
     await message.bot.send_chat_action(message.chat.id, "upload_photo")
@@ -153,30 +145,24 @@ async def _generate_and_send(
         logger.error("Image generation failed user=%s model=%s: %s", db_user.id, model_key, exc)
         error_text = str(exc)
         if "429" in error_text or "quota" in error_text.lower() or "rate" in error_text.lower():
-            user_message = "⏳ Service is busy. Please try again in a minute."
+            user_message = t("image_busy", lang)
         elif "402" in error_text or "insufficient" in error_text.lower() or "credits" in error_text.lower():
-            user_message = (
-                f"💳 <b>{model_cfg.name}</b> is temporarily unavailable.\n\n"
-                f"Try a free model → /imagemodels"
-            )
+            user_message = t("image_model_unavailable", lang, model=model_cfg.name)
         elif "text instead of image" in error_text.lower():
-            user_message = (
-                "⚠️ The model returned text instead of an image.\n"
-                "Try rephrasing your description."
-            )
+            user_message = t("image_text_instead", lang)
         else:
-            user_message = "⚠️ Could not create the image. Try another model → /imagemodels"
-        await status.edit_text(user_message, parse_mode="HTML", reply_markup=image_models_keyboard(model_key))
+            user_message = t("image_failed", lang)
+        await status.edit_text(user_message, parse_mode="HTML", reply_markup=image_models_keyboard(model_key, lang))
         return
     except Exception:
         logger.exception("Unexpected image generation error user=%s model=%s", db_user.id, model_key)
-        await status.edit_text("⚠️ Could not create the image. Please try again later.")
+        await status.edit_text(t("image_failed_later", lang))
         return
 
     if cost > 0 and not db_user.has_unlimited_access:
         spent = await spend_credits(db_session, db_user.id, cost)
         if not spent:
-            await status.edit_text("❌ Not enough requests to complete this action.")
+            await status.edit_text(t("image_spend_failed", lang))
             return
 
     ext = _extension_for_mime(mime_type)
@@ -197,9 +183,7 @@ async def _generate_and_send(
         )
     except Exception:
         logger.exception("Failed to send photo user=%s model=%s", db_user.id, model_key)
-        await message.answer(
-            "⚠️ Image was generated but could not be sent. Please try again.",
-        )
+        await message.answer(t("image_send_failed", lang))
         return
 
     await _set_waiting(db_session, db_user, True)
@@ -210,12 +194,13 @@ async def cancel_image_prompt(
     callback: CallbackQuery,
     db_session: AsyncSession,
     db_user: User,
+    lang: str = "en",
 ) -> None:
     if not db_user.waiting_for_image:
-        await callback.answer("Nothing to cancel.")
+        await callback.answer(t("image_cancel_nothing", lang))
         return
     await _set_waiting(db_session, db_user, False)
-    await callback.message.edit_text("❌ Image generation cancelled.")
+    await callback.message.edit_text(t("image_cancelled", lang))
     await callback.answer()
 
 

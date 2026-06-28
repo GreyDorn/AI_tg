@@ -20,7 +20,7 @@ from llm import get_llm
 from llm.gemini import GeminiLLM, VISION_UNAVAILABLE_MSG
 from bot.keyboards.main import models_keyboard
 from bot.utils.formatting import format_model_text
-from bot.i18n import all_menu_button_texts, resolve_lang
+from bot.i18n import all_menu_button_texts, resolve_lang, t, btn
 from bot.utils.growth import answer_out_of_credits, answer_low_credits_hint
 
 router = Router()
@@ -77,7 +77,7 @@ async def _download_photo_bytes(message: Message) -> tuple[bytes, str]:
     else:
         data = bytes(downloaded)
     if len(data) > 4 * 1024 * 1024:
-        raise ValueError("Image is too large. Maximum size is 4 MB.")
+        raise ValueError("IMAGE_TOO_LARGE")
     return data, "image/jpeg"
 
 
@@ -86,10 +86,7 @@ def _photo_user_content(caption: str | None) -> str:
     return f"[📷 Image] {caption}" if caption else "[📷 Image]"
 
 
-VISION_ERROR_MESSAGE = (
-    "⚠️ <b>Could not analyze the photo</b>\n\n"
-    "Try again later. For text chat, choose a non-Gemini model in 🤖 <b>Models</b>."
-)
+VISION_ERROR_KEY = "chat_vision_failed"
 
 
 async def _revert_auto_switched_model(
@@ -109,9 +106,10 @@ async def _reply_photo_failed(
     db_user: User,
     *,
     previous_model_key: str | None = None,
+    lang: str = "en",
 ) -> None:
     await _revert_auto_switched_model(db_session, db_user, previous_model_key)
-    await reply.edit_text(VISION_ERROR_MESSAGE, parse_mode="HTML")
+    await reply.edit_text(t(VISION_ERROR_KEY, lang), parse_mode="HTML")
 
 
 def _is_rate_limited(error_str: str) -> bool:
@@ -137,6 +135,7 @@ async def _reply_streaming(
     *,
     vision_mode: bool = False,
     revert_model_key: str | None = None,
+    lang: str = "en",
 ) -> None:
     full_response = ""
     last_edit_time = asyncio.get_event_loop().time()
@@ -158,10 +157,10 @@ async def _reply_streaming(
                 await add_credits(db_session, db_user.id, credits_spent)
             if vision_mode:
                 await _reply_photo_failed(
-                    reply, db_session, db_user, previous_model_key=revert_model_key,
+                    reply, db_session, db_user, previous_model_key=revert_model_key, lang=lang,
                 )
             else:
-                await reply.edit_text("⚠️ The model returned an empty response.")
+                await reply.edit_text(t("chat_empty_response", lang))
             return
 
         parts = _split_text(full_response)
@@ -177,50 +176,37 @@ async def _reply_streaming(
 
         if vision_mode:
             if VISION_UNAVAILABLE_MSG in error_str or "gemini api" in error_str.lower():
-                await reply.edit_text(
-                    "📷 <b>Photo analysis is not available</b>\n\n"
-                    "Gemini API is not configured on this bot.",
-                    parse_mode="HTML",
-                )
+                await reply.edit_text(t("chat_vision_unavailable", lang), parse_mode="HTML")
             else:
                 await _reply_photo_failed(
-                    reply, db_session, db_user, previous_model_key=revert_model_key,
+                    reply, db_session, db_user, previous_model_key=revert_model_key, lang=lang,
                 )
         elif _is_rate_limited(error_str):
             await reply.edit_text(
-                f"⏳ <b>Model is overloaded</b>\n\n"
-                f"<b>{model_name}</b> has reached its request limit.\n\n"
-                f"Choose another model 👇",
+                t("chat_rate_limited", lang, model=model_name),
                 parse_mode="HTML",
                 reply_markup=models_keyboard(model_key),
             )
         elif "402" in error_str or "insufficient balance" in error_str.lower() or "payment required" in error_str.lower():
             await reply.edit_text(
-                f"💳 <b>Model temporarily unavailable</b>\n\n"
-                f"<b>{model_name}</b> is not available right now due to provider limits.\n\n"
-                f"Choose another model 👇",
+                t("chat_provider_limit", lang, model=model_name),
                 parse_mode="HTML",
                 reply_markup=models_keyboard(model_key),
             )
         elif "decommissioned" in error_str or "not supported" in error_str:
             await reply.edit_text(
-                f"❌ <b>Model unavailable</b>\n\n"
-                f"<b>{model_name}</b> was decommissioned by the provider.\n\n"
-                f"Choose another model 👇",
+                t("chat_model_gone", lang, model=model_name),
                 parse_mode="HTML",
                 reply_markup=models_keyboard(model_key),
             )
         elif "too large" in error_str.lower() or "entity too large" in error_str.lower() or "context" in error_str.lower():
             await reply.edit_text(
-                f"📝 <b>Conversation context is too large</b>\n\n"
-                f"Start a new chat with /newchat or tap <b>💬 New Chat</b> — "
-                f"this will clear the history so you can continue.",
+                t("chat_context_large", lang, new_chat_btn=btn("new_chat", lang)),
                 parse_mode="HTML",
             )
         else:
             await reply.edit_text(
-                f"⚠️ <b>Model error</b>\n\n"
-                f"Try again or choose a different model 👇",
+                t("chat_model_error", lang),
                 parse_mode="HTML",
                 reply_markup=models_keyboard(model_key),
             )
@@ -277,11 +263,11 @@ async def handle_message(message: Message, db_session: AsyncSession, db_user: Us
         if await spend_credits(db_session, db_user.id, model_cfg.cost_per_message):
             credits_spent = model_cfg.cost_per_message
         else:
-            await answer_out_of_credits(message, db_user)
+            await answer_out_of_credits(message, db_user, lang)
             return
 
     await message.bot.send_chat_action(message.chat.id, "typing")
-    reply = await message.answer("⏳")
+    reply = await message.answer(t("chat_thinking", lang))
     llm, model_id, disable_thinking = get_llm(model_key)
 
     await _reply_streaming(
@@ -294,11 +280,12 @@ async def handle_message(message: Message, db_session: AsyncSession, db_user: Us
         model_cfg.name,
         credits_spent,
         llm.stream(context, model_id, disable_thinking),
+        lang=lang,
     )
 
 
 @router.message(F.photo)
-async def handle_photo(message: Message, db_session: AsyncSession, db_user: User) -> None:
+async def handle_photo(message: Message, db_session: AsyncSession, db_user: User, lang: str = "en") -> None:
     exited_image_mode = db_user.waiting_for_image
     if db_user.waiting_for_image:
         await clear_waiting_modes(db_session, db_user.id)
@@ -308,11 +295,7 @@ async def handle_photo(message: Message, db_session: AsyncSession, db_user: User
         return
 
     if not GEMINI_API_KEY:
-        await message.answer(
-            "📷 <b>Photo analysis is not available</b>\n\n"
-            "Gemini API is not configured on this bot.",
-            parse_mode="HTML",
-        )
+        await message.answer(t("chat_vision_unavailable", lang), parse_mode="HTML")
         return
 
     vision_key, vision_cfg = _vision_model_for_user(db_user)
@@ -342,19 +325,19 @@ async def handle_photo(message: Message, db_session: AsyncSession, db_user: User
             credits_spent = vision_cfg.cost_per_message
         else:
             await _revert_auto_switched_model(db_session, db_user, revert_model_key)
-            await answer_out_of_credits(message, db_user)
+            await answer_out_of_credits(message, db_user, lang)
             return
 
     try:
         image_bytes, mime_type = await _download_photo_bytes(message)
-    except ValueError as exc:
+    except ValueError:
         await _revert_auto_switched_model(db_session, db_user, revert_model_key)
-        await message.answer(f"❌ {exc}")
+        await message.answer(f"❌ {t('chat_image_too_large', lang)}")
         return
     except Exception:
         logger.exception("Failed to download photo user=%s", db_user.id)
         await _revert_auto_switched_model(db_session, db_user, revert_model_key)
-        await message.answer("⚠️ Could not download the image. Please try again.")
+        await message.answer(t("chat_image_download_failed", lang))
         return
 
     prompt = (message.caption or "").strip() or DEFAULT_VISION_PROMPT
@@ -362,13 +345,13 @@ async def handle_photo(message: Message, db_session: AsyncSession, db_user: User
 
     await message.bot.send_chat_action(message.chat.id, "typing")
     if exited_image_mode and auto_switched:
-        status = f"📷 Left image mode — switched to <b>{vision_cfg.name}</b>, analyzing photo..."
+        status = t("chat_photo_status_left_switched", lang, model=vision_cfg.name)
     elif exited_image_mode:
-        status = f"📷 Left image mode — analyzing photo with <b>{vision_cfg.name}</b>..."
+        status = t("chat_photo_status_left", lang, model=vision_cfg.name)
     elif auto_switched:
-        status = f"📷 Switched to <b>{vision_cfg.name}</b> — analyzing photo..."
+        status = t("chat_photo_status_switched", lang, model=vision_cfg.name)
     else:
-        status = f"📷 Analyzing with <b>{vision_cfg.name}</b>..."
+        status = t("chat_photo_status", lang, model=vision_cfg.name)
     reply = await message.answer(status, parse_mode="HTML")
 
     await _reply_streaming(
@@ -389,4 +372,5 @@ async def handle_photo(message: Message, db_session: AsyncSession, db_user: User
         ),
         vision_mode=True,
         revert_model_key=revert_model_key,
+        lang=lang,
     )

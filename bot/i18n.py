@@ -467,4 +467,528 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "\n🔥 Come back tomorrow to start a streak!",
         "ru": "\n🔥 Заходи завтра — начни серию!",
     },
+    # help
+    "help": {
+        "en": (
+            "<b>📚 Help</b>\n\n"
+            "<b>Commands:</b>\n"
+            "/start — main menu\n"
+            "/newchat — start a new conversation\n"
+            "/models — choose a text model\n"
+            "/image — create an image\n"
+            "/imagemodels — choose image model\n"
+            "{music_commands}"
+            "/balance — your request balance\n"
+            "/buy — unlimited subscription\n"
+            "/referral — referral program\n"
+            "/invite — invite dashboard\n"
+            "/top — referral leaderboard\n"
+            "/help — this help message\n\n"
+            "<b>Text models:</b>\n{models_text}\n\n"
+            "<b>Image models:</b>\n{image_models_text}\n\n"
+            "{music_section}"
+            "<b>Free requests:</b>\n"
+            "• {free_start} requests on registration\n"
+            "• +{daily} every day\n"
+            "• +{bonus} for each referred friend (milestones → free unlimited)\n"
+            "• Leaderboard: /top\n\n"
+            "💎 <b>Unlimited subscription</b> — {price} ⭐ per month"
+        ),
+        "ru": (
+            "<b>📚 Справка</b>\n\n"
+            "<b>Команды:</b>\n"
+            "/start — главное меню\n"
+            "/newchat — новый диалог\n"
+            "/models — выбор текстовой модели\n"
+            "/image — создать картинку\n"
+            "/imagemodels — модели для картинок\n"
+            "{music_commands}"
+            "/balance — баланс запросов\n"
+            "/buy — безлимитная подписка\n"
+            "/referral — реферальная программа\n"
+            "/invite — панель приглашений\n"
+            "/top — топ приглашающих\n"
+            "/help — эта справка\n\n"
+            "<b>Текстовые модели:</b>\n{models_text}\n\n"
+            "<b>Модели картинок:</b>\n{image_models_text}\n\n"
+            "{music_section}"
+            "<b>Бесплатные запросы:</b>\n"
+            "• {free_start} при регистрации\n"
+            "• +{daily} каждый день\n"
+            "• +{bonus} за каждого друга (бонусы → безлимит)\n"
+            "• Топ: /top\n\n"
+            "💎 <b>Безлимитная подписка</b> — {price} ⭐ в месяц"
+        ),
+    },
+    "help_music_commands": {
+        "en": "/music — create music\n/musicmodels — choose music model\n",
+        "ru": "/music — создать музыку\n/musicmodels — модели музыки\n",
+    },
+    "help_music_section": {
+        "en": "<b>Music models:</b>\n{models}\n\n",
+        "ru": "<b>Модели музыки:</b>\n{models}\n\n",
+    },
+    "help_model_free": {
+        "en": " ({cost})",
+        "ru": " ({cost})",
+    },
+    # chat
+    "chat_thinking": {"en": "⏳", "ru": "⏳"},
+    "chat_empty_response": {
+        "en": "⚠️ The model returned an empty response.",
+        "ru": "⚠️ Модель вернула пустой ответ.",
+    },
+    "chat_vision_unavailable": {
+        "en": "📷 <b>Photo analysis is not available</b>\n\nGemini API is not configured on this bot.",
+        "ru": "📷 <b>Анализ фото недоступен</b>\n\nGemini API не настроен на этом боте.",
+    },
+    "chat_vision_failed": {
+        "en": (
+            "⚠️ <b>Could not analyze the photo</b>\n\n"
+            "Try again later. For text chat, choose a non-Gemini model in 🤖 <b>Models</b>."
+        ),
+        "ru": (
+            "⚠️ <b>Не удалось проанализировать фото</b>\n\n"
+            "Попробуй позже. Для текста выбери не-Gemini модель в 🤖 <b>Модели</b>."
+        ),
+    },
+    "chat_rate_limited": {
+        "en": (
+            "⏳ <b>Model is overloaded</b>\n\n"
+            "<b>{model}</b> has reached its request limit.\n\n"
+            "Choose another model 👇"
+        ),
+        "ru": (
+            "⏳ <b>Модель перегружена</b>\n\n"
+            "<b>{model}</b> достигла лимита запросов.\n\n"
+            "Выбери другую модель 👇"
+        ),
+    },
+    "chat_provider_limit": {
+        "en": (
+            "💳 <b>Model temporarily unavailable</b>\n\n"
+            "<b>{model}</b> is not available right now due to provider limits.\n\n"
+            "Choose another model 👇"
+        ),
+        "ru": (
+            "💳 <b>Модель временно недоступна</b>\n\n"
+            "<b>{model}</b> сейчас недоступна из-за лимитов провайдера.\n\n"
+            "Выбери другую модель 👇"
+        ),
+    },
+    "chat_model_gone": {
+        "en": (
+            "❌ <b>Model unavailable</b>\n\n"
+            "<b>{model}</b> was decommissioned by the provider.\n\n"
+            "Choose another model 👇"
+        ),
+        "ru": (
+            "❌ <b>Модель недоступна</b>\n\n"
+            "<b>{model}</b> отключена провайдером.\n\n"
+            "Выбери другую модель 👇"
+        ),
+    },
+    "chat_context_large": {
+        "en": (
+            "📝 <b>Conversation context is too large</b>\n\n"
+            "Start a new chat with /newchat or tap <b>{new_chat_btn}</b> — "
+            "this will clear the history so you can continue."
+        ),
+        "ru": (
+            "📝 <b>История чата слишком большая</b>\n\n"
+            "Начни новый диалог через /newchat или нажми <b>{new_chat_btn}</b> — "
+            "история очистится и можно продолжить."
+        ),
+    },
+    "chat_model_error": {
+        "en": "⚠️ <b>Model error</b>\n\nTry again or choose a different model 👇",
+        "ru": "⚠️ <b>Ошибка модели</b>\n\nПопробуй снова или выбери другую модель 👇",
+    },
+    "chat_image_too_large": {
+        "en": "Image is too large. Maximum size is 4 MB.",
+        "ru": "Изображение слишком большое. Максимум 4 МБ.",
+    },
+    "chat_image_download_failed": {
+        "en": "⚠️ Could not download the image. Please try again.",
+        "ru": "⚠️ Не удалось загрузить изображение. Попробуй снова.",
+    },
+    "chat_photo_status_left_switched": {
+        "en": "📷 Left image mode — switched to <b>{model}</b>, analyzing photo...",
+        "ru": "📷 Вышел из режима картинок — переключился на <b>{model}</b>, анализирую фото...",
+    },
+    "chat_photo_status_left": {
+        "en": "📷 Left image mode — analyzing photo with <b>{model}</b>...",
+        "ru": "📷 Вышел из режима картинок — анализирую фото через <b>{model}</b>...",
+    },
+    "chat_photo_status_switched": {
+        "en": "📷 Switched to <b>{model}</b> — analyzing photo...",
+        "ru": "📷 Переключился на <b>{model}</b> — анализирую фото...",
+    },
+    "chat_photo_status": {
+        "en": "📷 Analyzing with <b>{model}</b>...",
+        "ru": "📷 Анализирую через <b>{model}</b>...",
+    },
+    "ratelimit": {
+        "en": (
+            "⏱ <b>Too many requests</b>\n\n"
+            "Please wait <b>{seconds} sec.</b> before sending the next message."
+        ),
+        "ru": (
+            "⏱ <b>Слишком много сообщений</b>\n\n"
+            "Подожди <b>{seconds} сек.</b> перед следующим сообщением."
+        ),
+    },
+    "processing_wait": {
+        "en": "⏳ Please wait, I'm still processing your previous request...",
+        "ru": "⏳ Подожди, я ещё обрабатываю предыдущий запрос...",
+    },
+    # payment
+    "pay_msg_not_found": {
+        "en": "Message not found. Try /buy again.",
+        "ru": "Сообщение не найдено. Попробуй /buy снова.",
+    },
+    "pay_invoice_title": {
+        "en": "Unlimited Subscription — 30 days",
+        "ru": "Безлимитная подписка — 30 дней",
+    },
+    "pay_invoice_desc": {
+        "en": (
+            "Unlimited text + image requests to all models for {days} days. "
+            "Fair-use: {rate_limit} messages per {rate_window} sec."
+        ),
+        "ru": (
+            "Безлимитные текстовые и графические запросы ко всем моделям на {days} дн. "
+            "Лимит: {rate_limit} сообщений за {rate_window} сек."
+        ),
+    },
+    "pay_invoice_label": {
+        "en": "{days}-day Subscription",
+        "ru": "Подписка на {days} дн.",
+    },
+    "pay_create_failed": {
+        "en": "Failed to create payment. Please try again later.",
+        "ru": "Не удалось создать платёж. Попробуй позже.",
+    },
+    "pay_start_failed": {
+        "en": (
+            "❌ <b>Payment could not be started.</b>\n\n"
+            "If the error persists:\n"
+            "1. Make sure you have enough ⭐ on your balance (need {price} ⭐)\n"
+            "2. Tap <b>Buy Stars</b> in /buy to top up via PremiumBot\n"
+            "3. Write to /paysupport\n\n"
+            "<i>Technical details: {details}</i>"
+        ),
+        "ru": (
+            "❌ <b>Не удалось начать оплату.</b>\n\n"
+            "Если ошибка повторяется:\n"
+            "1. Проверь баланс ⭐ (нужно {price} ⭐)\n"
+            "2. Нажми <b>Купить Stars</b> в /buy через PremiumBot\n"
+            "3. Напиши в /paysupport\n\n"
+            "<i>Технические детали: {details}</i>"
+        ),
+    },
+    "pay_invalid_order": {
+        "en": "Invalid order. Please start again with /buy.",
+        "ru": "Неверный заказ. Начни заново через /buy.",
+    },
+    "pay_unknown_order": {
+        "en": "Payment received, but the order could not be identified. Please contact /paysupport.",
+        "ru": "Платёж получен, но заказ не распознан. Напиши в /paysupport.",
+    },
+    "pay_activation_failed": {
+        "en": "Payment received, but subscription could not be activated. Please contact /paysupport.",
+        "ru": "Платёж получен, но подписку не удалось активировать. Напиши в /paysupport.",
+    },
+    "paysupport": {
+        "en": (
+            "💬 <b>Payment Support</b>\n\n"
+            "If you have issues paying with Telegram Stars:\n\n"
+            "1. You need at least <b>{price} ⭐</b> on your balance\n"
+            "2. Open /buy and tap <b>Buy Stars</b> — PremiumBot opens inline\n"
+            "3. Alternative link: {stars_url}\n"
+            "4. If you see <code>PROVIDER_ACCOUNT_INVALID</code>, "
+            "try another card or Telegram Desktop\n"
+            "5. After buying stars, tap <b>Subscribe</b> in /buy\n\n"
+            "If the problem persists, describe the error and send a screenshot here. "
+            "We will help manually."
+        ),
+        "ru": (
+            "💬 <b>Поддержка по оплате</b>\n\n"
+            "Если проблемы с оплатой через Telegram Stars:\n\n"
+            "1. Нужно минимум <b>{price} ⭐</b> на балансе\n"
+            "2. Открой /buy и нажми <b>Купить Stars</b> — PremiumBot откроется здесь\n"
+            "3. Альтернативная ссылка: {stars_url}\n"
+            "4. Если видишь <code>PROVIDER_ACCOUNT_INVALID</code>, "
+            "попробуй другую карту или Telegram Desktop\n"
+            "5. После покупки Stars нажми <b>Подписка</b> в /buy\n\n"
+            "Если проблема остаётся — опиши ошибку и пришли скриншот. Поможем вручную."
+        ),
+    },
+    # image
+    "image_help_waiting": {
+        "en": (
+            "🎨 <b>Describe your image in one message</b>\n\n"
+            "Model: <b>{model}</b> ({cost})\n"
+            "Example: <code>astronaut cat on the Moon</code>\n\n"
+            "Change model → /imagemodels"
+        ),
+        "ru": (
+            "🎨 <b>Опиши картинку в одном сообщении</b>\n\n"
+            "Модель: <b>{model}</b> ({cost})\n"
+            "Пример: <code>кот-астронавт на Луне</code>\n\n"
+            "Сменить модель → /imagemodels"
+        ),
+    },
+    "image_help": {
+        "en": (
+            "🎨 <b>Image Generation</b>\n\n"
+            "Model: <b>{model}</b> ({cost})\n\n"
+            "Send a command:\n"
+            "<code>/image astronaut cat on the Moon</code>\n\n"
+            "Change model → /imagemodels"
+        ),
+        "ru": (
+            "🎨 <b>Генерация картинок</b>\n\n"
+            "Модель: <b>{model}</b> ({cost})\n\n"
+            "Отправь команду:\n"
+            "<code>/image кот-астронавт на Луне</code>\n\n"
+            "Сменить модель → /imagemodels"
+        ),
+    },
+    "image_prompt_too_long": {
+        "en": "❌ Description is too long. Maximum 1000 characters.",
+        "ru": "❌ Описание слишком длинное. Максимум 1000 символов.",
+    },
+    "image_not_enough": {
+        "en": (
+            "❌ <b>Not enough requests</b>\n\n"
+            "<b>{model}</b> costs <b>{cost}</b> requests.\n"
+            "You have: <b>{credits}</b>\n\n"
+            "Try a free model → /imagemodels\n"
+            "Unlimited access → /buy"
+        ),
+        "ru": (
+            "❌ <b>Недостаточно запросов</b>\n\n"
+            "<b>{model}</b> стоит <b>{cost}</b> запросов.\n"
+            "На балансе: <b>{credits}</b>\n\n"
+            "Попробуй бесплатную модель → /imagemodels\n"
+            "Безлимит → /buy"
+        ),
+    },
+    "image_drawing": {
+        "en": "🎨 Drawing with <b>{model}</b>... Please wait 10–40 sec.",
+        "ru": "🎨 Рисую через <b>{model}</b>... Подожди 10–40 сек.",
+    },
+    "image_busy": {
+        "en": "⏳ Service is busy. Please try again in a minute.",
+        "ru": "⏳ Сервис перегружен. Попробуй через минуту.",
+    },
+    "image_model_unavailable": {
+        "en": "💳 <b>{model}</b> is temporarily unavailable.\n\nTry a free model → /imagemodels",
+        "ru": "💳 <b>{model}</b> временно недоступна.\n\nПопробуй бесплатную модель → /imagemodels",
+    },
+    "image_text_instead": {
+        "en": "⚠️ The model returned text instead of an image.\nTry rephrasing your description.",
+        "ru": "⚠️ Модель вернула текст вместо картинки.\nПопробуй переформулировать описание.",
+    },
+    "image_failed": {
+        "en": "⚠️ Could not create the image. Try another model → /imagemodels",
+        "ru": "⚠️ Не удалось создать картинку. Попробуй другую модель → /imagemodels",
+    },
+    "image_failed_later": {
+        "en": "⚠️ Could not create the image. Please try again later.",
+        "ru": "⚠️ Не удалось создать картинку. Попробуй позже.",
+    },
+    "image_spend_failed": {
+        "en": "❌ Not enough requests to complete this action.",
+        "ru": "❌ Недостаточно запросов для этого действия.",
+    },
+    "image_send_failed": {
+        "en": "⚠️ Image was generated but could not be sent. Please try again.",
+        "ru": "⚠️ Картинка создана, но не отправилась. Попробуй снова.",
+    },
+    "image_cancel_nothing": {
+        "en": "Nothing to cancel.",
+        "ru": "Нечего отменять.",
+    },
+    "image_cancelled": {
+        "en": "❌ Image generation cancelled.",
+        "ru": "❌ Генерация картинки отменена.",
+    },
+    # image models
+    "image_models_title": {
+        "en": (
+            "🖼 <b>Image Models</b>\n\n"
+            "Current: <b>{model}</b> ({cost})\n\n"
+            "Pick a model or just describe your image in the <b>next message</b> 👇"
+            "{hidden_note}"
+        ),
+        "ru": (
+            "🖼 <b>Модели картинок</b>\n\n"
+            "Сейчас: <b>{model}</b> ({cost})\n\n"
+            "Выбери модель или опиши картинку в <b>следующем сообщении</b> 👇"
+            "{hidden_note}"
+        ),
+    },
+    "image_models_hidden": {
+        "en": "\n\n<i>Premium image models are hidden until OpenRouter credits are available.</i>",
+        "ru": "\n\n<i>Премиум-модели скрыты, пока нет кредитов OpenRouter.</i>",
+    },
+    "image_models_ready": {
+        "en": (
+            "🎨 <b>Ready to draw</b> — model: <b>{model}</b>\n\n"
+            "Describe your image in the <b>next message</b>.\n"
+            "Example: <code>astronaut cat on the Moon</code>"
+        ),
+        "ru": (
+            "🎨 <b>Готов рисовать</b> — модель: <b>{model}</b>\n\n"
+            "Опиши картинку в <b>следующем сообщении</b>.\n"
+            "Пример: <code>кот-астронавт на Луне</code>"
+        ),
+    },
+    "image_model_unavailable_alert": {
+        "en": "This model is currently unavailable.",
+        "ru": "Эта модель сейчас недоступна.",
+    },
+    "image_model_selected_describe": {
+        "en": "✅ {model} — describe your image",
+        "ru": "✅ {model} — опиши картинку",
+    },
+    "image_model_selected": {
+        "en": "✅ {model}",
+        "ru": "✅ {model}",
+    },
+    # music
+    "music_disabled": {
+        "en": (
+            "🎵 <b>Music generation is temporarily unavailable</b>\n\n"
+            "This feature will return when a free music API is available."
+        ),
+        "ru": (
+            "🎵 <b>Генерация музыки временно недоступна</b>\n\n"
+            "Функция вернётся, когда появится бесплатный API."
+        ),
+    },
+    "music_unavailable": {
+        "en": (
+            "🎵 <b>Music generation is not available</b>\n\n"
+            "Pollinations API key is missing. Ask the bot admin to add "
+            "<code>POLLINATIONS_API_KEY</code> to <code>.env</code>.\n"
+            "Get a key: https://enter.pollinations.ai"
+        ),
+        "ru": (
+            "🎵 <b>Генерация музыки недоступна</b>\n\n"
+            "Нет ключа Pollinations API. Попроси админа добавить "
+            "<code>POLLINATIONS_API_KEY</code> в <code>.env</code>.\n"
+            "Ключ: https://enter.pollinations.ai"
+        ),
+    },
+    "music_help_waiting": {
+        "en": (
+            "🎵 <b>Describe your music in one message</b>\n\n"
+            "Model: <b>{model}</b> ({cost}, ~{duration}s)\n"
+            "Example: <code>upbeat electronic dance track with synths</code>\n\n"
+            "Change model → /musicmodels"
+        ),
+        "ru": (
+            "🎵 <b>Опиши музыку в одном сообщении</b>\n\n"
+            "Модель: <b>{model}</b> ({cost}, ~{duration} сек.)\n"
+            "Пример: <code>энергичный электронный трек с синтами</code>\n\n"
+            "Сменить модель → /musicmodels"
+        ),
+    },
+    "music_help": {
+        "en": (
+            "🎵 <b>Music Generation</b>\n\n"
+            "Model: <b>{model}</b> ({cost}, ~{duration}s)\n\n"
+            "Send a command:\n"
+            "<code>/music upbeat electronic dance track</code>\n\n"
+            "Change model → /musicmodels"
+        ),
+        "ru": (
+            "🎵 <b>Генерация музыки</b>\n\n"
+            "Модель: <b>{model}</b> ({cost}, ~{duration} сек.)\n\n"
+            "Отправь команду:\n"
+            "<code>/music энергичный электронный трек</code>\n\n"
+            "Сменить модель → /musicmodels"
+        ),
+    },
+    "music_not_enough": {
+        "en": (
+            "❌ <b>Not enough requests</b>\n\n"
+            "<b>{model}</b> costs <b>{cost}</b> requests.\n"
+            "You have: <b>{credits}</b>\n\n"
+            "Try a free model → /musicmodels\n"
+            "Unlimited access → /buy"
+        ),
+        "ru": (
+            "❌ <b>Недостаточно запросов</b>\n\n"
+            "<b>{model}</b> стоит <b>{cost}</b> запросов.\n"
+            "На балансе: <b>{credits}</b>\n\n"
+            "Попробуй бесплатную модель → /musicmodels\n"
+            "Безлимит → /buy"
+        ),
+    },
+    "music_composing": {
+        "en": "🎵 Composing with <b>{model}</b>... Please wait 30–90 sec.",
+        "ru": "🎵 Создаю через <b>{model}</b>... Подожди 30–90 сек.",
+    },
+    "music_api_invalid": {
+        "en": "🔑 Music API key is invalid. Contact the bot admin.",
+        "ru": "🔑 Неверный ключ Music API. Свяжись с админом бота.",
+    },
+    "music_credits_depleted": {
+        "en": "💳 <b>Music service credits depleted</b>\n\nTry again later or contact the bot admin.",
+        "ru": "💳 <b>Кредиты музыкального сервиса закончились</b>\n\nПопробуй позже или свяжись с админом.",
+    },
+    "music_failed": {
+        "en": "⚠️ Could not create the music. Try another model → /musicmodels",
+        "ru": "⚠️ Не удалось создать музыку. Попробуй другую модель → /musicmodels",
+    },
+    "music_failed_later": {
+        "en": "⚠️ Could not create the music. Please try again later.",
+        "ru": "⚠️ Не удалось создать музыку. Попробуй позже.",
+    },
+    "music_send_failed": {
+        "en": "⚠️ Music was generated but could not be sent. Please try again.",
+        "ru": "⚠️ Музыка создана, но не отправилась. Попробуй снова.",
+    },
+    "music_cancel_nothing": {
+        "en": "Nothing to cancel.",
+        "ru": "Нечего отменять.",
+    },
+    "music_cancelled": {
+        "en": "❌ Music generation cancelled.",
+        "ru": "❌ Генерация музыки отменена.",
+    },
+    "music_models_not_configured": {
+        "en": (
+            "🎵 <b>Music generation is not configured</b>\n\n"
+            "The bot needs a Pollinations API key.\n"
+            "Get one at https://enter.pollinations.ai and add "
+            "<code>POLLINATIONS_API_KEY</code> to <code>.env</code>."
+        ),
+        "ru": (
+            "🎵 <b>Генерация музыки не настроена</b>\n\n"
+            "Боту нужен ключ Pollinations API.\n"
+            "Получи на https://enter.pollinations.ai и добавь "
+            "<code>POLLINATIONS_API_KEY</code> в <code>.env</code>."
+        ),
+    },
+    "music_models_title": {
+        "en": (
+            "🎵 <b>Music Models</b>\n\n"
+            "Current: <b>{model}</b> ({cost}, ~{duration}s)\n\n"
+            "Pick a model, then send /music or tap {create_btn}."
+        ),
+        "ru": (
+            "🎵 <b>Модели музыки</b>\n\n"
+            "Сейчас: <b>{model}</b> ({cost}, ~{duration} сек.)\n\n"
+            "Выбери модель, затем /music или {create_btn}."
+        ),
+    },
+    "music_not_configured_alert": {
+        "en": "Music is not configured on this bot.",
+        "ru": "Музыка не настроена на этом боте.",
+    },
 }

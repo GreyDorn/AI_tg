@@ -6,29 +6,21 @@ from config import MUSIC_MODELS
 from db.models import User
 from db.repository import update_user_music_model
 from bot.keyboards.main import music_models_keyboard
-from bot.i18n import button_filter
+from bot.i18n import button_filter, btn, format_cost, t
 from llm.music_gen import is_pollinations_music_configured, is_music_feature_enabled
 from llm.provider_status import get_available_music_models, resolve_music_model_key
 
 router = Router()
 
 
-def _format_cost(cost: int) -> str:
-    if cost == 0:
-        return "free"
-    if cost == 1:
-        return "1 request"
-    return f"{cost} requests"
-
-
-async def _show_music_models(target: Message | CallbackQuery, db_user: User, db_session: AsyncSession) -> None:
+async def _show_music_models(
+    target: Message | CallbackQuery,
+    db_user: User,
+    db_session: AsyncSession,
+    lang: str = "en",
+) -> None:
     if not is_pollinations_music_configured():
-        text = (
-            "🎵 <b>Music generation is not configured</b>\n\n"
-            "The bot needs a Pollinations API key.\n"
-            "Get one at https://enter.pollinations.ai and add "
-            "<code>POLLINATIONS_API_KEY</code> to <code>.env</code>."
-        )
+        text = t("music_models_not_configured", lang)
         if isinstance(target, CallbackQuery):
             await target.message.edit_text(text, parse_mode="HTML")
         else:
@@ -42,13 +34,15 @@ async def _show_music_models(target: Message | CallbackQuery, db_user: User, db_
 
     available = get_available_music_models()
     current = available[model_key]
-    text = (
-        f"🎵 <b>Music Models</b>\n\n"
-        f"Current: <b>{current.name}</b> ({_format_cost(current.cost_per_track)}, "
-        f"~{current.duration_seconds}s)\n\n"
-        f"Pick a model, then send /music or tap 🎵 Create Music."
+    text = t(
+        "music_models_title",
+        lang,
+        model=current.name,
+        cost=format_cost(current.cost_per_track, lang),
+        duration=current.duration_seconds,
+        create_btn=btn("create_music", lang),
     )
-    markup = music_models_keyboard(model_key)
+    markup = music_models_keyboard(model_key, lang)
 
     if isinstance(target, CallbackQuery):
         await target.message.edit_text(text, parse_mode="HTML", reply_markup=markup)
@@ -58,32 +52,39 @@ async def _show_music_models(target: Message | CallbackQuery, db_user: User, db_
 
 @router.message(Command("musicmodels"))
 @router.message(button_filter("music_models"))
-async def cmd_music_models(message: Message, db_session: AsyncSession, db_user: User) -> None:
+async def cmd_music_models(
+    message: Message,
+    db_session: AsyncSession,
+    db_user: User,
+    lang: str = "en",
+) -> None:
     if not is_music_feature_enabled():
-        await message.answer(
-            "🎵 <b>Music generation is temporarily unavailable</b>",
-            parse_mode="HTML",
-        )
+        await message.answer(t("music_disabled", lang), parse_mode="HTML")
         return
-    await _show_music_models(message, db_user, db_session)
+    await _show_music_models(message, db_user, db_session, lang)
 
 
 @router.callback_query(F.data.startswith("musicmodel:"))
-async def select_music_model(callback: CallbackQuery, db_session: AsyncSession, db_user: User) -> None:
+async def select_music_model(
+    callback: CallbackQuery,
+    db_session: AsyncSession,
+    db_user: User,
+    lang: str = "en",
+) -> None:
     if not is_pollinations_music_configured():
-        await callback.answer("Music is not configured on this bot.", show_alert=True)
+        await callback.answer(t("music_not_configured_alert", lang), show_alert=True)
         return
 
     model_key = callback.data.split(":", 1)[1]
     available = get_available_music_models()
 
     if model_key not in available:
-        await callback.answer("This model is currently unavailable.", show_alert=True)
+        await callback.answer(t("image_model_unavailable_alert", lang), show_alert=True)
         return
 
     if model_key == db_user.current_music_model:
         try:
-            await callback.answer("This model is already selected ✅")
+            await callback.answer(t("model_already", lang))
         except Exception:
             pass
         return
@@ -92,7 +93,7 @@ async def select_music_model(callback: CallbackQuery, db_session: AsyncSession, 
     db_user.current_music_model = model_key
 
     try:
-        await callback.answer(f"✅ {MUSIC_MODELS[model_key].name}")
+        await callback.answer(t("image_model_selected", lang, model=MUSIC_MODELS[model_key].name))
     except Exception:
         pass
-    await _show_music_models(callback, db_user, db_session)
+    await _show_music_models(callback, db_user, db_session, lang)

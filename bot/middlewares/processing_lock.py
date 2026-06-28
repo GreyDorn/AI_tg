@@ -1,6 +1,7 @@
 from typing import Callable, Awaitable, Any
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject, Message
+from bot.i18n import resolve_lang, t
 
 
 class ProcessingLockMiddleware(BaseMiddleware):
@@ -36,9 +37,8 @@ class ProcessingLockMiddleware(BaseMiddleware):
         user_id = tg_user.id
 
         if user_id in self._processing:
-            await raw.answer(
-                "⏳ Please wait, I'm still processing your previous request..."
-            )
+            lang = resolve_lang(tg_user)
+            await raw.answer(t("processing_wait", lang))
             return
 
         self._processing.add(user_id)
