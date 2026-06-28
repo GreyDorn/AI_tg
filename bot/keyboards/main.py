@@ -3,7 +3,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from config import MODELS, SUBSCRIPTION_PRICE_STARS, STARS_TOPUP_URL
 from llm.provider_status import get_available_image_models, get_available_music_models
 from llm.music_gen import is_music_feature_enabled
-from bot.i18n import format_cost, DEFAULT_LANG
+from bot.i18n import btn, inline, format_cost, DEFAULT_LANG
 
 
 def main_menu(lang: str = DEFAULT_LANG) -> ReplyKeyboardMarkup:
