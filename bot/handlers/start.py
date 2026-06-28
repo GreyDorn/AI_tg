@@ -15,6 +15,7 @@ from db.repository import (
     get_user,
 )
 from bot.keyboards.main import main_menu, growth_keyboard
+from bot.i18n import t, button_filter, milestone_label, resolve_lang
 from bot.utils.growth import (
     referral_link,
     invite_dashboard_text,
@@ -32,45 +33,39 @@ async def cmd_start(
     db_session: AsyncSession,
     db_user: User,
     is_new_user: bool = False,
+    lang: str = "en",
 ) -> None:
     bot_info = await message.bot.get_me()
-    ref_line = (
-        f"\n\n👥 Invite friends → <b>+{REFERRAL_BONUS_CREDITS} requests</b> each "
-        f"(milestones up to 1 month free) → /invite"
-    )
+    ref_line = t("start_ref_line", lang, bonus=REFERRAL_BONUS_CREDITS)
     welcome_extra = ""
     if is_new_user and db_user.referred_by:
-        welcome_extra = (
-            f"\n\n🎁 You joined via a friend's link — "
-            f"<b>{FREE_CREDITS_ON_START} requests</b> are ready to use!"
-        )
+        welcome_extra = t("start_referred", lang, credits=FREE_CREDITS_ON_START)
 
     music_line = ""
     if is_music_feature_enabled():
-        music_line = "\n• Create music with /music 🎵"
+        music_line = t("start_music_line", lang)
 
     await message.answer(
-        f"👋 <b>Hey, {message.from_user.first_name}!</b>\n\n"
-        f"I'm a free AI assistant with <b>multiple models</b>:\n"
-        f"Llama, Gemini, DeepSeek and more.\n\n"
-        f"🎁 <b>{FREE_CREDITS_ON_START} free requests</b> to start\n"
-        f"🎁 <b>+{DAILY_FREE_CREDITS}</b> every day{welcome_extra}\n\n"
-        f"<b>Try now:</b>\n"
-        f"• Send any question in chat 💬\n"
-        f"• Send a photo — Gemini will analyze it 📷\n"
-        f"• Create images with /image 🎨{music_line}\n"
-        f"• Pick a model in 🤖 Models\n"
-        f"• Check balance in 💰 Balance{ref_line}",
+        t(
+            "start_welcome",
+            lang,
+            name=message.from_user.first_name,
+            free_start=FREE_CREDITS_ON_START,
+            daily=DAILY_FREE_CREDITS,
+            welcome_extra=welcome_extra,
+            music_line=music_line,
+            ref_line=ref_line,
+        ),
         parse_mode="HTML",
-        reply_markup=main_menu(),
+        reply_markup=main_menu(lang),
     )
 
     if is_new_user:
         ref_link = referral_link(bot_info.username, db_user.id)
         await message.answer(
-            invite_dashboard_text(ref_link, 0, db_user.credits, 0),
+            invite_dashboard_text(ref_link, 0, db_user.credits, 0, lang),
             parse_mode="HTML",
-            reply_markup=growth_keyboard(bot_info.username, db_user.id),
+            reply_markup=growth_keyboard(bot_info.username, db_user.id, lang),
         )
 
         if db_user.referred_by:
@@ -94,18 +89,20 @@ async def _notify_referrer(
             return
         await db_session.refresh(referrer)
         ref_count = await count_referrals(db_session, referrer_id)
+        referrer_lang = resolve_lang(referrer)
         await message.bot.send_message(
             referrer_id,
-            new_referrer_notification_text(friend_name, ref_count, referrer.credits),
+            new_referrer_notification_text(friend_name, ref_count, referrer.credits, referrer_lang),
             parse_mode="HTML",
             reply_markup=growth_keyboard(
-                (await message.bot.get_me()).username, referrer_id,
+                (await message.bot.get_me()).username, referrer_id, referrer_lang,
             ),
         )
         if rewards:
+            localized = [milestone_label(r, referrer_lang) for r in rewards]
             await message.bot.send_message(
                 referrer_id,
-                milestone_unlocked_text(rewards),
+                milestone_unlocked_text(localized, referrer_lang),
                 parse_mode="HTML",
             )
     except TelegramForbiddenError:
@@ -167,16 +164,18 @@ async def cmd_help(message: Message) -> None:
 
 
 @router.message(Command("newchat"))
-@router.message(lambda m: m.text == "💬 New Chat")
-async def cmd_newchat(message: Message, db_session: AsyncSession, db_user: User) -> None:
+@router.message(button_filter("new_chat"))
+async def cmd_newchat(
+    message: Message,
+    db_session: AsyncSession,
+    db_user: User,
+    lang: str = "en",
+) -> None:
     await clear_waiting_modes(db_session, db_user.id)
     db_user.waiting_for_image = False
     db_user.waiting_for_music = False
     await create_conversation(db_session, db_user.id, db_user.current_model)
     await message.answer(
-        f"✅ <b>New conversation started!</b>\n\n"
-        f"Previous chat history was cleared.\n"
-        f"Model: <b>{MODELS[db_user.current_model].name}</b>\n\n"
-        f"Tip: use /start to see the welcome message again.",
+        t("newchat_done", lang, model=MODELS[db_user.current_model].name),
         parse_mode="HTML",
     )

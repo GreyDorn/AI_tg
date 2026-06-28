@@ -5,7 +5,6 @@ from datetime import datetime, date, timedelta, timezone
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from config import (
     DAILY_REMINDER_ENABLED,
@@ -18,6 +17,8 @@ from config import (
     SUBSCRIPTION_PRICE_STARS,
     STREAK_BONUS_START,
 )
+from bot.i18n import t, resolve_lang
+from bot.keyboards.main import daily_reminder_keyboard
 from db.repository import SessionFactory, get_users_for_daily_reminder, mark_daily_reminder_sent, get_bot_stats
 
 logger = logging.getLogger(__name__)
@@ -28,40 +29,34 @@ _last_reminder_date: date | None = None
 _last_channel_post_at: datetime | None = None
 
 
-def daily_reminder_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="🎁 Claim daily bonus", callback_data="claim_daily")],
-        ]
-    )
-
-
-def _reminder_text(streak: int) -> str:
+def _reminder_text(streak: int, lang: str) -> str:
     streak_hint = ""
     if streak >= 2:
-        streak_hint = f"\n🔥 Streak: <b>{streak} days</b> — don't break it!"
+        streak_hint = t("reminder_streak_active", lang, days=streak)
     elif streak == 1:
-        streak_hint = "\n🔥 Come back tomorrow to start a streak!"
-    return (
-        f"🎁 <b>Your daily bonus is ready!</b>\n\n"
-        f"Tap below to get <b>+{DAILY_FREE_CREDITS} free requests</b>{streak_hint}\n\n"
-        f"Or invite friends → <b>+{REFERRAL_BONUS_CREDITS}</b> each via /invite"
+        streak_hint = t("reminder_streak_start", lang)
+    return t(
+        "reminder_text",
+        lang,
+        daily=DAILY_FREE_CREDITS,
+        streak_hint=streak_hint,
+        bonus=REFERRAL_BONUS_CREDITS,
     )
 
 
 async def send_daily_reminders(bot: Bot) -> int:
     """Send reminders to users who haven't claimed today. Returns count sent."""
-    bot_info = await bot.get_me()
     sent = 0
     async with SessionFactory() as session:
         users = await get_users_for_daily_reminder(session)
         for user in users:
+            lang = resolve_lang(user)
             try:
                 await bot.send_message(
                     user.id,
-                    _reminder_text(user.login_streak),
+                    _reminder_text(user.login_streak, lang),
                     parse_mode="HTML",
-                    reply_markup=daily_reminder_keyboard(),
+                    reply_markup=daily_reminder_keyboard(lang),
                 )
                 await mark_daily_reminder_sent(session, user.id)
                 sent += 1
@@ -158,7 +153,7 @@ async def _reminder_loop(bot: Bot) -> None:
                 _last_reminder_date = now.date()
         except Exception:
             logger.exception("Daily reminder loop error")
-        await asyncio.sleep(300)  # check every 5 min
+        await asyncio.sleep(300)
 
 
 async def _channel_post_loop(bot: Bot) -> None:
@@ -174,7 +169,7 @@ async def _channel_post_loop(bot: Bot) -> None:
                         _last_channel_post_at = now
         except Exception:
             logger.exception("Channel post loop error")
-        await asyncio.sleep(600)  # check every 10 min
+        await asyncio.sleep(600)
 
 
 def start_growth_background_tasks(bot: Bot) -> None:

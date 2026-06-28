@@ -13,6 +13,7 @@ class User(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     username: Mapped[str | None] = mapped_column(String(64))
     full_name: Mapped[str] = mapped_column(String(256))
+    language_code: Mapped[str] = mapped_column(String(8), default="en")
     credits: Mapped[int] = mapped_column(Integer, default=0)
     is_unlimited: Mapped[bool] = mapped_column(Boolean, default=False)
     subscription_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

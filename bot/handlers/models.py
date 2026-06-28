@@ -6,11 +6,17 @@ from config import MODELS, resolve_model_key
 from db.models import User
 from db.repository import update_user_model, create_conversation, clear_waiting_modes
 from bot.keyboards.main import models_keyboard
+from bot.i18n import t, button_filter
 
 router = Router()
 
 
-async def _show_models(target: Message | CallbackQuery, db_user: User, db_session: AsyncSession) -> None:
+async def _show_models(
+    target: Message | CallbackQuery,
+    db_user: User,
+    db_session: AsyncSession,
+    lang: str,
+) -> None:
     await clear_waiting_modes(db_session, db_user.id)
     db_user.waiting_for_image = False
     db_user.waiting_for_music = False
@@ -20,12 +26,7 @@ async def _show_models(target: Message | CallbackQuery, db_user: User, db_sessio
         db_user.current_model = resolved
         await update_user_model(db_session, db_user.id, resolved)
 
-    text = (
-        f"🤖 <b>Choose a Model</b>\n\n"
-        f"Current: <b>{MODELS[db_user.current_model].name}</b>\n\n"
-        f"1 request per message for all models.\n"
-        f"📷 — can read photos in chat (Gemini)"
-    )
+    text = t("models_choose", lang, current=MODELS[db_user.current_model].name)
     markup = models_keyboard(db_user.current_model)
 
     if isinstance(target, CallbackQuery):
@@ -35,26 +36,36 @@ async def _show_models(target: Message | CallbackQuery, db_user: User, db_sessio
 
 
 @router.message(Command("models"))
-@router.message(F.text == "🤖 Models")
-async def cmd_models(message: Message, db_session: AsyncSession, db_user: User) -> None:
-    await _show_models(message, db_user, db_session)
+@router.message(button_filter("models"))
+async def cmd_models(
+    message: Message,
+    db_session: AsyncSession,
+    db_user: User,
+    lang: str = "en",
+) -> None:
+    await _show_models(message, db_user, db_session, lang)
 
 
 @router.callback_query(F.data.startswith("model:"))
-async def select_model(callback: CallbackQuery, db_session: AsyncSession, db_user: User) -> None:
+async def select_model(
+    callback: CallbackQuery,
+    db_session: AsyncSession,
+    db_user: User,
+    lang: str = "en",
+) -> None:
     model_key = callback.data.split(":", 1)[1]
 
     if model_key not in MODELS:
-        await callback.answer("Unknown model.", show_alert=True)
+        await callback.answer(t("model_unknown", lang), show_alert=True)
         return
 
     current_key = resolve_model_key(db_user.current_model)
     if model_key == current_key:
         try:
-            await callback.answer("This model is already selected ✅")
+            await callback.answer(t("model_already", lang))
         except Exception:
             pass
-        await _show_models(callback, db_user, db_session)
+        await _show_models(callback, db_user, db_session, lang)
         return
 
     await update_user_model(db_session, db_user.id, model_key)
@@ -62,7 +73,7 @@ async def select_model(callback: CallbackQuery, db_session: AsyncSession, db_use
     await create_conversation(db_session, db_user.id, model_key)
 
     try:
-        await callback.answer(f"✅ Switched to {MODELS[model_key].name}")
+        await callback.answer(t("model_switched", lang, name=MODELS[model_key].name))
     except Exception:
         pass
-    await _show_models(callback, db_user, db_session)
+    await _show_models(callback, db_user, db_session, lang)

@@ -1,22 +1,23 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from config import MODELS, DEFAULT_MODEL, SUBSCRIPTION_PRICE_STARS, STARS_TOPUP_URL
+from config import MODELS, SUBSCRIPTION_PRICE_STARS, STARS_TOPUP_URL
 from llm.provider_status import get_available_image_models, get_available_music_models
 from llm.music_gen import is_music_feature_enabled
+from bot.i18n import format_cost, DEFAULT_LANG
 
 
-def main_menu() -> ReplyKeyboardMarkup:
+def main_menu(lang: str = DEFAULT_LANG) -> ReplyKeyboardMarkup:
     keyboard = [
-        [KeyboardButton(text="💬 New Chat"), KeyboardButton(text="🤖 Models")],
-        [KeyboardButton(text="🎨 Create Image"), KeyboardButton(text="🖼 Image Models")],
+        [KeyboardButton(text=btn("new_chat", lang)), KeyboardButton(text=btn("models", lang))],
+        [KeyboardButton(text=btn("create_image", lang)), KeyboardButton(text=btn("image_models", lang))],
     ]
     if is_music_feature_enabled():
         keyboard.append(
-            [KeyboardButton(text="🎵 Create Music"), KeyboardButton(text="🎵 Music Models")]
+            [KeyboardButton(text=btn("create_music", lang)), KeyboardButton(text=btn("music_models", lang))]
         )
     keyboard.extend([
-        [KeyboardButton(text="💰 Balance"), KeyboardButton(text="👥 Referral")],
-        [KeyboardButton(text="💎 Subscription")],
+        [KeyboardButton(text=btn("balance", lang)), KeyboardButton(text=btn("referral", lang))],
+        [KeyboardButton(text=btn("subscription", lang))],
     ])
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
 
@@ -34,11 +35,11 @@ def models_keyboard(current_model: str) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def image_models_keyboard(current_model: str) -> InlineKeyboardMarkup:
+def image_models_keyboard(current_model: str, lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     for key, model in get_available_image_models().items():
         mark = "✅ " if key == current_model else ""
-        cost = "free" if model.cost_per_image == 0 else f"{model.cost_per_image} req"
+        cost = format_cost(model.cost_per_image, lang)
         builder.button(
             text=f"{mark}{model.name} ({cost})",
             callback_data=f"imagemodel:{key}",
@@ -47,17 +48,17 @@ def image_models_keyboard(current_model: str) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def cancel_keyboard() -> InlineKeyboardMarkup:
+def cancel_keyboard(lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="❌ Cancel", callback_data="cancel")]]
+        inline_keyboard=[[InlineKeyboardButton(text=inline("cancel", lang), callback_data="cancel")]]
     )
 
 
-def music_models_keyboard(current_model: str) -> InlineKeyboardMarkup:
+def music_models_keyboard(current_model: str, lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     for key, model in get_available_music_models().items():
         mark = "✅ " if key == current_model else ""
-        cost = "free" if model.cost_per_track == 0 else f"{model.cost_per_track} req"
+        cost = format_cost(model.cost_per_track, lang)
         builder.button(
             text=f"{mark}{model.name} ({cost})",
             callback_data=f"musicmodel:{key}",
@@ -66,64 +67,72 @@ def music_models_keyboard(current_model: str) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def cancel_music_keyboard() -> InlineKeyboardMarkup:
+def cancel_music_keyboard(lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="❌ Cancel", callback_data="cancel_music")]]
+        inline_keyboard=[[InlineKeyboardButton(text=inline("cancel_music", lang), callback_data="cancel_music")]]
     )
 
 
-def _buy_stars_button() -> InlineKeyboardButton:
+def _buy_stars_button(lang: str = DEFAULT_LANG) -> InlineKeyboardButton:
     return InlineKeyboardButton(
-        text=f"⭐ Buy Stars — from {SUBSCRIPTION_PRICE_STARS}",
+        text=inline("buy_stars", lang, price=SUBSCRIPTION_PRICE_STARS),
         url=STARS_TOPUP_URL,
     )
 
 
-def _subscribe_button() -> InlineKeyboardButton:
+def _subscribe_button(lang: str = DEFAULT_LANG) -> InlineKeyboardButton:
     return InlineKeyboardButton(
-        text=f"💎 Subscribe — {SUBSCRIPTION_PRICE_STARS} ⭐",
+        text=inline("subscribe", lang, price=SUBSCRIPTION_PRICE_STARS),
         callback_data="subscribe",
     )
 
 
-def referral_keyboard(bot_username: str, user_id: int) -> InlineKeyboardMarkup:
+def referral_keyboard(bot_username: str, user_id: int, lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
     from bot.utils.growth import share_url
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="📤 Share bot", url=share_url(bot_username, user_id))],
-            [_buy_stars_button()],
-            [_subscribe_button()],
+            [InlineKeyboardButton(text=inline("share_bot", lang), url=share_url(bot_username, user_id, lang))],
+            [_buy_stars_button(lang)],
+            [_subscribe_button(lang)],
         ]
     )
 
 
-def growth_keyboard(bot_username: str, user_id: int) -> InlineKeyboardMarkup:
+def growth_keyboard(bot_username: str, user_id: int, lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
     from bot.utils.growth import share_url
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="📤 Share bot (+5 req)", url=share_url(bot_username, user_id))],
-            [_buy_stars_button()],
-            [_subscribe_button()],
+            [InlineKeyboardButton(text=inline("share_bot_bonus", lang), url=share_url(bot_username, user_id, lang))],
+            [_buy_stars_button(lang)],
+            [_subscribe_button(lang)],
         ]
     )
 
 
-def image_share_keyboard(bot_username: str, user_id: int) -> InlineKeyboardMarkup:
+def image_share_keyboard(bot_username: str, user_id: int, lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
     from bot.utils.growth import image_share_url
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="📤 Share this bot", url=image_share_url(bot_username, user_id))],
+            [InlineKeyboardButton(text=inline("share_this_bot", lang), url=image_share_url(bot_username, user_id, lang))],
         ]
     )
 
 
-def subscription_keyboard() -> InlineKeyboardMarkup:
+def subscription_keyboard(lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [_buy_stars_button()],
-            [_subscribe_button()],
+            [_buy_stars_button(lang)],
+            [_subscribe_button(lang)],
+        ]
+    )
+
+
+def daily_reminder_keyboard(lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=inline("claim_daily", lang), callback_data="claim_daily")],
         ]
     )

@@ -3,6 +3,7 @@ from datetime import datetime
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject, Update
 from config import resolve_model_key
+from bot.i18n import resolve_lang
 from db.repository import SessionFactory, get_or_create_user, claim_daily_credits, update_user_model
 
 
@@ -38,6 +39,7 @@ class UserMiddleware(BaseMiddleware):
                 full_name=tg_user.full_name,
                 username=tg_user.username,
                 referred_by=referred_by,
+                language_code=tg_user.language_code,
             )
 
             if not is_new:
@@ -56,4 +58,5 @@ class UserMiddleware(BaseMiddleware):
             data["db_session"] = session
             data["db_user"] = user
             data["is_new_user"] = is_new
+            data["lang"] = resolve_lang(user)
             return await handler(event, data)

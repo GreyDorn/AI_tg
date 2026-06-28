@@ -11,6 +11,7 @@ from config import SUBSCRIPTION_PRICE_STARS, SUBSCRIPTION_DAYS, PREMIUM_BOT_STAR
 from db.models import User
 from db.repository import process_subscription_payment
 from bot.keyboards.main import subscription_keyboard
+from bot.i18n import t, button_filter
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -28,31 +29,28 @@ def _is_subscription_payload(payload: str, user_id: int) -> bool:
 
 
 @router.message(Command("buy"))
-@router.message(F.text == "💎 Subscription")
-async def cmd_buy(message: Message, db_user: User) -> None:
+@router.message(button_filter("subscription"))
+async def cmd_buy(message: Message, db_user: User, lang: str = "en") -> None:
     sub_status = ""
     if db_user.has_unlimited_access and db_user.subscription_until:
-        sub_status = (
-            f"\n\n✨ <b>Your subscription is active</b> until "
-            f"<b>{db_user.subscription_until.strftime('%d.%m.%Y')}</b>\n"
-            f"A new payment will extend it by {SUBSCRIPTION_DAYS} more days."
+        sub_status = t(
+            "buy_sub_active",
+            lang,
+            date=db_user.subscription_until.strftime("%d.%m.%Y"),
+            days=SUBSCRIPTION_DAYS,
         )
 
     await message.answer(
-        f"💎 <b>Unlimited Subscription</b>\n\n"
-        f"<b>What's included:</b>\n"
-        f"• Unlimited text requests to <b>all LLM models</b>\n"
-        f"• Unlimited image generation with <b>all image models</b>\n"
-        f"  (Gemini Image, Flux Klein, Flux, Turbo)\n"
-        f"• {SUBSCRIPTION_DAYS} days of access{sub_status}\n\n"
-        f"<b>Fair-use limit:</b>\n"
-        f"• Up to <b>{RATE_LIMIT_MESSAGES} messages per {RATE_LIMIT_WINDOW} sec.</b> "
-        f"(anti-spam protection for everyone)\n\n"
-        f"Price: <b>{SUBSCRIPTION_PRICE_STARS} ⭐ Stars per month</b>\n\n"
-        f"ℹ️ Need stars? Tap <b>Buy Stars</b> below — the purchase window "
-        f"opens right here (via PremiumBot), without leaving the chat.\n"
-        f"Then tap <b>Subscribe</b> to activate unlimited access.",
-        reply_markup=subscription_keyboard(),
+        t(
+            "buy_info",
+            lang,
+            days=SUBSCRIPTION_DAYS,
+            sub_status=sub_status,
+            rate_limit=RATE_LIMIT_MESSAGES,
+            rate_window=RATE_LIMIT_WINDOW,
+            price=SUBSCRIPTION_PRICE_STARS,
+        ),
+        reply_markup=subscription_keyboard(lang),
     )
 
 
@@ -114,7 +112,7 @@ async def pre_checkout(query: PreCheckoutQuery) -> None:
 
 @router.message(F.successful_payment)
 async def successful_payment(
-    message: Message, db_session: AsyncSession, db_user: User
+    message: Message, db_session: AsyncSession, db_user: User, lang: str = "en"
 ) -> None:
     payment: SuccessfulPayment = message.successful_payment
 
@@ -156,16 +154,13 @@ async def successful_payment(
     until_text = result.subscription_until.strftime("%d.%m.%Y")
     if result.is_duplicate:
         await message.answer(
-            f"✅ <b>Payment already processed</b>\n\n"
-            f"Your subscription is active until <b>{until_text}</b>.",
+            t("sub_already_paid", lang, date=until_text),
             parse_mode="HTML",
         )
         return
 
     await message.answer(
-        f"✅ <b>Subscription activated!</b>\n\n"
-        f"Unlimited access to all text and image models until "
-        f"<b>{until_text}</b> 🎉",
+        t("sub_activated", lang, date=until_text),
         parse_mode="HTML",
     )
 

@@ -9,14 +9,12 @@ from db.repository import spend_credits, update_user_music_model, set_waiting_fo
 from llm.music_gen import generate_music, MusicGenerationError, is_pollinations_music_configured, is_music_feature_enabled
 from llm.provider_status import resolve_music_model_key
 from bot.keyboards.main import music_models_keyboard, cancel_music_keyboard
+from bot.i18n import all_menu_button_texts, button_filter
 
 router = Router()
 logger = logging.getLogger(__name__)
 
-MENU_BUTTONS = {
-    "💬 New Chat", "🤖 Models", "💰 Balance", "👥 Referral", "💎 Subscription",
-    "🎨 Create Image", "🖼 Image Models", "🎵 Create Music", "🎵 Music Models",
-}
+MENU_BUTTONS = all_menu_button_texts()
 
 
 class WaitingForMusicFilter(BaseFilter):
@@ -217,7 +215,7 @@ async def cmd_music(
     await _generate_and_send(message, db_session, db_user, prompt)
 
 
-@router.message(F.text == "🎵 Create Music")
+@router.message(button_filter("create_music"))
 async def btn_music(
     message: Message,
     db_session: AsyncSession,

@@ -33,6 +33,7 @@ async def init_db() -> None:
             "ALTER TABLE users ADD COLUMN login_streak INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE users ADD COLUMN last_active_date DATETIME",
             "ALTER TABLE users ADD COLUMN daily_reminder_sent_at DATETIME",
+            "ALTER TABLE users ADD COLUMN language_code VARCHAR(8) NOT NULL DEFAULT 'en'",
         ]:
             try:
                 await conn.execute(text(column_sql))
@@ -42,22 +43,34 @@ async def init_db() -> None:
 
 # ── Users ──────────────────────────────────────────────────────────────────────
 
+def _normalize_language_code(code: str | None) -> str:
+    if code and str(code).lower().startswith("ru"):
+        return "ru"
+    return "en"
+
+
 async def get_or_create_user(
     session: AsyncSession,
     user_id: int,
     full_name: str,
     username: str | None,
     referred_by: int | None = None,
+    language_code: str | None = None,
 ) -> tuple[User, bool]:
     """Возвращает (user, is_new)."""
+    lang = _normalize_language_code(language_code)
     user = await session.get(User, user_id)
     if user:
+        if user.language_code != lang:
+            user.language_code = lang
+            await session.commit()
         return user, False
 
     user = User(
         id=user_id,
         full_name=full_name,
         username=username,
+        language_code=lang,
         credits=FREE_CREDITS_ON_START,
         referred_by=referred_by if referred_by != user_id else None,
     )

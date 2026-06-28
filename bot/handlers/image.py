@@ -4,20 +4,18 @@ from aiogram import Router, F
 from aiogram.filters import Command, CommandObject, BaseFilter
 from aiogram.types import Message, BufferedInputFile, CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
-from config import IMAGE_MODELS, IMAGE_VIRAL_FOOTER
+from config import IMAGE_MODELS
 from db.models import User
 from db.repository import spend_credits, update_user_image_model, set_waiting_for_image
 from llm.image_gen import generate_image, ImageGenerationError
 from llm.provider_status import resolve_image_model_key
 from bot.keyboards.main import image_models_keyboard, cancel_keyboard, image_share_keyboard
+from bot.i18n import all_menu_button_texts, button_filter, format_cost, image_viral_footer, resolve_lang
 
 router = Router()
 logger = logging.getLogger(__name__)
 
-MENU_BUTTONS = {
-    "💬 New Chat", "🤖 Models", "💰 Balance", "👥 Referral", "💎 Subscription",
-    "🎨 Create Image", "🖼 Image Models", "🎵 Create Music", "🎵 Music Models",
-}
+MENU_BUTTONS = all_menu_button_texts()
 
 _IMAGE_INTENT = re.compile(
     r"^(?:"
@@ -60,12 +58,8 @@ def _extension_for_mime(mime_type: str) -> str:
     }.get(mime_type, "png")
 
 
-def _format_cost(cost: int) -> str:
-    if cost == 0:
-        return "free"
-    if cost == 1:
-        return "1 request"
-    return f"{cost} requests"
+def _format_cost(cost: int, lang: str) -> str:
+    return format_cost(cost, lang)
 
 
 def _get_image_model(db_user: User) -> tuple[str, object]:
@@ -84,9 +78,10 @@ async def _set_waiting(
     db_user.waiting_for_image = waiting
 
 
-async def _show_image_help(message: Message, db_user: User, waiting: bool = False) -> None:
+async def _show_image_help(message: Message, db_user: User, waiting: bool = False, lang: str | None = None) -> None:
+    lang = lang or resolve_lang(db_user)
     model_key, model_cfg = _get_image_model(db_user)
-    cost = _format_cost(model_cfg.cost_per_image)
+    cost = _format_cost(model_cfg.cost_per_image, lang)
 
     if waiting:
         text = (
@@ -106,7 +101,7 @@ async def _show_image_help(message: Message, db_user: User, waiting: bool = Fals
     await message.answer(
         text,
         parse_mode="HTML",
-        reply_markup=cancel_keyboard() if waiting else image_models_keyboard(model_key),
+        reply_markup=cancel_keyboard(lang) if waiting else image_models_keyboard(model_key, lang),
     )
 
 
@@ -133,6 +128,7 @@ async def _generate_and_send(
         await message.answer("❌ Description is too long. Maximum 1000 characters.")
         return
 
+    lang = resolve_lang(db_user)
     if cost > 0 and db_user.credits < cost and not db_user.has_unlimited_access:
         await message.answer(
             f"❌ <b>Not enough requests</b>\n\n"
@@ -141,7 +137,7 @@ async def _generate_and_send(
             f"Try a free model → /imagemodels\n"
             f"Unlimited access → /buy",
             parse_mode="HTML",
-            reply_markup=image_models_keyboard(model_key),
+            reply_markup=image_models_keyboard(model_key, lang),
         )
         return
 
@@ -185,7 +181,7 @@ async def _generate_and_send(
 
     ext = _extension_for_mime(mime_type)
     bot_info = await message.bot.get_me()
-    viral = IMAGE_VIRAL_FOOTER.format(bot_username=bot_info.username)
+    viral = image_viral_footer(bot_info.username, lang)
     caption = f"🎨 {model_cfg.name}\n{prompt[:800]}{viral}"
 
     try:
@@ -197,7 +193,7 @@ async def _generate_and_send(
         await message.answer_photo(
             BufferedInputFile(image_bytes, filename=f"image.{ext}"),
             caption=caption,
-            reply_markup=image_share_keyboard(bot_info.username, db_user.id),
+            reply_markup=image_share_keyboard(bot_info.username, db_user.id, lang),
         )
     except Exception:
         logger.exception("Failed to send photo user=%s model=%s", db_user.id, model_key)
@@ -238,14 +234,15 @@ async def cmd_image(
     await _generate_and_send(message, db_session, db_user, prompt)
 
 
-@router.message(F.text == "🎨 Create Image")
+@router.message(button_filter("create_image"))
 async def btn_image(
     message: Message,
     db_session: AsyncSession,
     db_user: User,
+    lang: str = "en",
 ) -> None:
     await _set_waiting(db_session, db_user, True)
-    await _show_image_help(message, db_user, waiting=True)
+    await _show_image_help(message, db_user, waiting=True, lang=lang)
 
 
 @router.message(F.text, ImageIntentFilter())

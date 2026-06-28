@@ -20,6 +20,7 @@ from llm import get_llm
 from llm.gemini import GeminiLLM, VISION_UNAVAILABLE_MSG
 from bot.keyboards.main import models_keyboard
 from bot.utils.formatting import format_model_text
+from bot.i18n import all_menu_button_texts, resolve_lang
 from bot.utils.growth import answer_out_of_credits, answer_low_credits_hint
 
 router = Router()
@@ -230,18 +231,19 @@ async def _reply_streaming(
     if not vision_mode and not db_user.has_unlimited_access:
         await db_session.refresh(db_user)
         if db_user.credits in (1, 2):
-            await answer_low_credits_hint(message, db_user, db_user.credits)
+            await answer_low_credits_hint(message, db_user, db_user.credits, resolve_lang(db_user))
 
 
 async def _ensure_credits(message: Message, db_user: User, cost: int) -> bool:
     if db_user.has_unlimited_access or db_user.credits >= cost:
         return True
-    await answer_out_of_credits(message, db_user)
+    lang = resolve_lang(db_user)
+    await answer_out_of_credits(message, db_user, lang)
     return False
 
 
-@router.message(F.text & ~F.text.startswith("/") & ~F.text.in_({"💬 New Chat", "🤖 Models", "💰 Balance", "👥 Referral", "💎 Subscription", "🎨 Create Image", "🖼 Image Models", "🎵 Create Music", "🎵 Music Models"}))
-async def handle_message(message: Message, db_session: AsyncSession, db_user: User) -> None:
+@router.message(F.text & ~F.text.startswith("/") & ~F.text.in_(all_menu_button_texts()))
+async def handle_message(message: Message, db_session: AsyncSession, db_user: User, lang: str = "en") -> None:
     if db_user.waiting_for_image or db_user.waiting_for_music:
         return
 
