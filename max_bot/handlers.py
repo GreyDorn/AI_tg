@@ -11,6 +11,7 @@ from db.repository import (
     get_or_create_user,
     clear_waiting_modes,
     update_user_model,
+    update_user_image_model,
     create_conversation,
     get_active_conversation,
     clear_conversation_messages,
@@ -33,8 +34,9 @@ from max_bot.images import (
     generate_and_send,
     select_image_model,
     set_image_waiting,
+    resolve_max_image_model_key,
+    ensure_free_image_model,
 )
-from llm.provider_status import resolve_image_model_key
 
 logger = logging.getLogger(__name__)
 
@@ -191,7 +193,9 @@ async def _handle_callback(callback_id: str | None, payload: str | None, sender:
             user, _ = await get_or_create_user(
                 session, sender.user_id, sender.full_name, sender.username, language_code="ru",
             )
-            current = resolve_image_model_key(user.current_image_model)
+            current = resolve_max_image_model_key(user.current_image_model)
+            if current != user.current_image_model:
+                await update_user_image_model(session, user.id, current)
             await set_image_waiting(session, user, True)
         await show_image_models(sender.user_id, current)
         return
@@ -203,8 +207,7 @@ async def _handle_callback(callback_id: str | None, payload: str | None, sender:
             )
             await set_image_waiting(session, user, True)
             from max_bot.keyboards import cancel_image_keyboard
-            from core.image import resolve_image_model
-            _, model_cfg = resolve_image_model(user)
+            _, model_cfg = await ensure_free_image_model(session, user)
             await send_message(
                 user_id=sender.user_id,
                 text=f"Опишите, что нарисовать.\nМодель: {model_cfg.name}",
@@ -367,7 +370,9 @@ async def _handle_command(sender: Sender, text: str) -> bool:
             user, _ = await get_or_create_user(
                 session, sender.user_id, sender.full_name, sender.username, language_code="ru",
             )
-            current = resolve_image_model_key(user.current_image_model)
+            current = resolve_max_image_model_key(user.current_image_model)
+            if current != user.current_image_model:
+                await update_user_image_model(session, user.id, current)
             await set_image_waiting(session, user, True)
         await show_image_models(sender.user_id, current)
         return True
@@ -382,8 +387,7 @@ async def _handle_command(sender: Sender, text: str) -> bool:
             if not prompt:
                 await set_image_waiting(session, user, True)
                 from max_bot.keyboards import cancel_image_keyboard
-                from core.image import resolve_image_model
-                _, model_cfg = resolve_image_model(user)
+                _, model_cfg = await ensure_free_image_model(session, user)
                 await send_message(
                     user_id=sender.user_id,
                     text=f"Опишите, что нарисовать.\nМодель: {model_cfg.name}",

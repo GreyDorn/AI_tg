@@ -7,12 +7,11 @@ import re
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from config import IMAGE_MODELS
+from config import DEFAULT_IMAGE_MODEL, IMAGE_MODELS
 from db.models import User
 from db.repository import set_waiting_for_image, update_user_image_model, spend_credits
-from core.image import validate_prompt, sync_user_image_model
+from core.image import validate_prompt
 from core.credits import can_afford
-from llm.provider_status import resolve_image_model_key
 from max_bot.keyboards import available_image_models
 from max_bot.api import upload_image_bytes, send_image_message, send_message
 from max_bot.gateway_client import GatewayError, generate_image as generate_via_gateway
@@ -44,6 +43,23 @@ def _extension_for_mime(mime_type: str) -> str:
     return {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}.get(mime_type, "png")
 
 
+def resolve_max_image_model_key(current: str) -> str:
+    available = available_image_models()
+    if current in available:
+        return current
+    if DEFAULT_IMAGE_MODEL in available:
+        return DEFAULT_IMAGE_MODEL
+    return next(iter(available))
+
+
+async def ensure_free_image_model(session: AsyncSession, user: User) -> tuple[str, object]:
+    model_key = resolve_max_image_model_key(user.current_image_model)
+    if model_key != user.current_image_model:
+        await update_user_image_model(session, user.id, model_key)
+        user.current_image_model = model_key
+    return model_key, IMAGE_MODELS[model_key]
+
+
 async def set_image_waiting(session: AsyncSession, user: User, waiting: bool) -> None:
     if user.waiting_for_image == waiting:
         return
@@ -69,7 +85,7 @@ async def show_image_models(user_id: int, current_key: str) -> None:
 
 
 async def generate_and_send(user_id: int, session: AsyncSession, user: User, prompt: str) -> None:
-    model_key, model_cfg = await sync_user_image_model(session, user)
+    model_key, model_cfg = await ensure_free_image_model(session, user)
 
     if not validate_prompt(prompt):
         await send_message(

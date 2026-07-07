@@ -98,10 +98,6 @@ async def main() -> None:
     await init_db()
     logger.info("MAX bot database initialized")
 
-    from llm.provider_status import probe_openrouter_paid
-    openrouter_ok = await probe_openrouter_paid()
-    logger.info("OpenRouter image models: %s", "available" if openrouter_ok else "pollinations only")
-
     app = create_app()
     runner = web.AppRunner(app)
     await runner.setup()

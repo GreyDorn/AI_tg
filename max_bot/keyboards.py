@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from config import IMAGE_MODELS, MODELS, MONETIZATION_ENABLED
-from llm.provider_status import get_available_image_models
+from config import IMAGE_MODELS, MODELS
 
 
 def _inline_keyboard(buttons: list[list[dict]]) -> list[dict]:
@@ -11,10 +10,8 @@ def _inline_keyboard(buttons: list[list[dict]]) -> list[dict]:
 
 
 def available_image_models() -> dict:
-    """In free mode show all models; gateway on DE handles actual availability."""
-    if MONETIZATION_ENABLED:
-        return get_available_image_models()
-    return dict(IMAGE_MODELS)
+    """MAX bot: only free Pollinations models (Flux, Turbo)."""
+    return {k: v for k, v in IMAGE_MODELS.items() if v.provider == "pollinations"}
 
 
 def _inline_keyboard(buttons: list[list[dict]]) -> list[dict]:
