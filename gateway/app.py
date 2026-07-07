@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 import sys
 from dataclasses import dataclass
@@ -15,11 +16,13 @@ from config import (
     GATEWAY_PORT,
     MODELS,
     CHAT_SYSTEM_PROMPT,
+    DEFAULT_VISION_PROMPT,
     resolve_model_key,
 )
 from core.errors import classify_llm_error
 from core.types import LlmErrorKind
 from llm import get_llm
+from llm.gemini import GeminiLLM
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,6 +30,7 @@ logging.basicConfig(
     stream=sys.stdout,
 )
 logger = logging.getLogger(__name__)
+_vision_llm = GeminiLLM()
 
 
 @dataclass
@@ -117,10 +121,87 @@ async def chat(request: web.Request) -> web.Response:
     )
 
 
+async def vision(request: web.Request) -> web.Response:
+    auth_error = _check_auth(request)
+    if auth_error:
+        return auth_error
+
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "invalid json"}, status=400)
+
+    model_key = resolve_model_key(str(data.get("model_key") or ""))
+    vision_cfg = MODELS.get(model_key)
+    if not vision_cfg or not vision_cfg.supports_vision or vision_cfg.provider != "google":
+        model_key = "gemini-2.5-flash-lite"
+        vision_cfg = MODELS[model_key]
+
+    raw_b64 = data.get("image_base64")
+    if not raw_b64:
+        return web.json_response({"error": "image_base64 required"}, status=400)
+
+    try:
+        image_bytes = base64.b64decode(raw_b64)
+    except Exception:
+        return web.json_response({"error": "invalid image_base64"}, status=400)
+
+    if not image_bytes:
+        return web.json_response({"error": "empty image"}, status=400)
+    if len(image_bytes) > 8 * 1024 * 1024:
+        return web.json_response({"error": "image too large"}, status=400)
+
+    mime_type = str(data.get("mime_type") or "image/jpeg")
+    prompt = str(data.get("prompt") or DEFAULT_VISION_PROMPT).strip() or DEFAULT_VISION_PROMPT
+
+    raw_messages = data.get("messages") or []
+    messages: list[_ChatMessage] = []
+    if isinstance(raw_messages, list):
+        for item in raw_messages:
+            if not isinstance(item, dict):
+                continue
+            role = str(item.get("role") or "").strip()
+            content = str(item.get("content") or "")
+            if role in ("user", "assistant") and content:
+                messages.append(_ChatMessage(role=role, content=content))
+
+    try:
+        stream = _vision_llm.stream_vision(
+            image_bytes,
+            mime_type,
+            prompt,
+            messages,  # type: ignore[arg-type]
+            vision_cfg.id,
+        )
+        text = await _collect_stream(stream)
+    except Exception as exc:
+        kind = classify_llm_error(exc, vision_mode=True)
+        logger.exception("Vision error model=%s kind=%s", model_key, kind.value)
+        return web.json_response(
+            {"error": str(exc), "kind": kind.value},
+            status=502,
+        )
+
+    if not text.strip():
+        return web.json_response(
+            {"error": "empty response", "kind": LlmErrorKind.EMPTY_RESPONSE.value},
+            status=502,
+        )
+
+    return web.json_response(
+        {
+            "text": text,
+            "model_key": model_key,
+            "model_name": vision_cfg.name,
+        }
+    )
+
+
 def create_app() -> web.Application:
-    app = web.Application(client_max_size=8 * 1024 * 1024)
+    app = web.Application(client_max_size=16 * 1024 * 1024)
     app.router.add_get("/health", health)
     app.router.add_post("/v1/chat", chat)
+    app.router.add_post("/v1/vision", vision)
     return app
 
 
