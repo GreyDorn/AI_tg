@@ -24,7 +24,7 @@ from core.chat import (
 )
 from core.credits import refund
 from core.types import LlmErrorKind
-from max_bot.api import send_message, answer_callback
+from max_bot.api import send_message, edit_message, answer_callback
 from max_bot.gateway_client import GatewayError, complete_chat, complete_vision
 from max_bot.keyboards import models_keyboard, main_menu_keyboard
 from max_bot.media import find_image_url, download_bytes
@@ -130,6 +130,23 @@ def _error_text(kind: LlmErrorKind, *, vision: bool = False) -> str:
 
 async def _reply(user_id: int, text: str, *, keyboard: list[dict] | None = None) -> None:
     attachments = keyboard or main_menu_keyboard()
+    await send_message(user_id=user_id, text=text, attachments=attachments)
+
+
+async def _send_status(user_id: int, text: str) -> str | None:
+    return await send_message(user_id=user_id, text=text)
+
+
+async def _finish_status(
+    user_id: int,
+    status_id: str | None,
+    text: str,
+    *,
+    keyboard: list[dict] | None = None,
+) -> None:
+    attachments = keyboard or main_menu_keyboard()
+    if status_id and await edit_message(status_id, text, attachments=attachments):
+        return
     await send_message(user_id=user_id, text=text, attachments=attachments)
 
 
@@ -253,24 +270,30 @@ async def _handle_chat(sender: Sender, text: str) -> None:
             return
 
         messages = [{"role": m.role, "content": m.content} for m in setup.context]
+        user_id = user.id
 
-        try:
-            answer = await complete_chat(setup.model_key, messages)
-        except GatewayError as exc:
-            if setup.credits_spent:
-                await refund(session, user.id, setup.credits_spent)
-            await _reply(sender.user_id, _error_text(exc.kind))
-            return
-        except Exception:
-            logger.exception("Gateway chat failed user=%s", sender.user_id)
-            if setup.credits_spent:
-                await refund(session, user.id, setup.credits_spent)
-            await _reply(sender.user_id, _error_text(LlmErrorKind.GENERIC))
-            return
+    status_id = await _send_status(sender.user_id, "⏳")
 
+    try:
+        answer = await complete_chat(setup.model_key, messages)
+    except GatewayError as exc:
+        async with SessionFactory() as session:
+            if setup.credits_spent:
+                await refund(session, user_id, setup.credits_spent)
+        await _finish_status(sender.user_id, status_id, _error_text(exc.kind))
+        return
+    except Exception:
+        logger.exception("Gateway chat failed user=%s", sender.user_id)
+        async with SessionFactory() as session:
+            if setup.credits_spent:
+                await refund(session, user_id, setup.credits_spent)
+        await _finish_status(sender.user_id, status_id, _error_text(LlmErrorKind.GENERIC))
+        return
+
+    async with SessionFactory() as session:
         await save_assistant_message(session, setup.conv_id, answer)
 
-    await _reply(sender.user_id, answer)
+    await _finish_status(sender.user_id, status_id, answer)
 
 
 async def _handle_vision(sender: Sender, text: str, attachments: list[dict]) -> None:
@@ -314,32 +337,52 @@ async def _handle_vision(sender: Sender, text: str, attachments: list[dict]) -> 
             return
 
         context = [{"role": m.role, "content": m.content} for m in setup.context]
+        vision_name = setup.vision_name
+        conv_id = setup.conv_id
+        revert_model_key = setup.revert_model_key
+        credits_spent = setup.credits_spent
+        vision_key = setup.vision_key
+        prompt = setup.prompt
 
-        try:
-            answer = await complete_vision(
-                setup.vision_key,
-                context,
-                image_bytes=image_bytes,
-                mime_type=mime_type,
-                prompt=setup.prompt,
+    status_id = await _send_status(
+        sender.user_id,
+        f"📷 Анализирую через {vision_name}…",
+    )
+
+    try:
+        answer = await complete_vision(
+            vision_key,
+            context,
+            image_bytes=image_bytes,
+            mime_type=mime_type,
+            prompt=prompt,
+        )
+    except GatewayError as exc:
+        async with SessionFactory() as session:
+            user, _ = await get_or_create_user(
+                session, sender.user_id, sender.full_name, sender.username, language_code="ru",
             )
-        except GatewayError as exc:
-            await revert_user_model(session, user, setup.revert_model_key)
-            if setup.credits_spent:
-                await refund(session, user.id, setup.credits_spent)
-            await _reply(sender.user_id, _error_text(exc.kind, vision=True))
-            return
-        except Exception:
-            logger.exception("Gateway vision failed user=%s", sender.user_id)
-            await revert_user_model(session, user, setup.revert_model_key)
-            if setup.credits_spent:
-                await refund(session, user.id, setup.credits_spent)
-            await _reply(sender.user_id, _error_text(LlmErrorKind.GENERIC, vision=True))
-            return
+            await revert_user_model(session, user, revert_model_key)
+            if credits_spent:
+                await refund(session, user.id, credits_spent)
+        await _finish_status(sender.user_id, status_id, _error_text(exc.kind, vision=True))
+        return
+    except Exception:
+        logger.exception("Gateway vision failed user=%s", sender.user_id)
+        async with SessionFactory() as session:
+            user, _ = await get_or_create_user(
+                session, sender.user_id, sender.full_name, sender.username, language_code="ru",
+            )
+            await revert_user_model(session, user, revert_model_key)
+            if credits_spent:
+                await refund(session, user.id, credits_spent)
+        await _finish_status(sender.user_id, status_id, _error_text(LlmErrorKind.GENERIC, vision=True))
+        return
 
-        await save_assistant_message(session, setup.conv_id, answer)
+    async with SessionFactory() as session:
+        await save_assistant_message(session, conv_id, answer)
 
-    await _reply(sender.user_id, answer)
+    await _finish_status(sender.user_id, status_id, answer)
 
 
 async def _handle_command(sender: Sender, text: str) -> bool:

@@ -83,13 +83,30 @@ def _image_payload_from_upload(result: dict) -> dict:
     raise RuntimeError(f"No image token in upload response: {result!r}")
 
 
+def _message_id_from_response(data: dict[str, Any]) -> str | None:
+    message = data.get("message")
+    if not isinstance(message, dict):
+        return None
+    body = message.get("body")
+    if isinstance(body, dict):
+        mid = body.get("mid")
+        if mid:
+            return str(mid)
+    for key in ("message_id", "id", "mid"):
+        value = message.get(key)
+        if value:
+            return str(value)
+    return None
+
+
 async def send_message(
     *,
     user_id: int | None = None,
     chat_id: int | None = None,
     text: str,
     attachments: list[dict] | None = None,
-) -> bool:
+) -> str | None:
+    """Send a message. Returns message id (mid) on success, None on failure."""
     params: dict[str, int] = {}
     if user_id is not None:
         params["user_id"] = user_id
@@ -97,7 +114,7 @@ async def send_message(
         params["chat_id"] = chat_id
     else:
         logger.warning("send_message: no recipient")
-        return False
+        return None
 
     body: dict[str, Any] = {"text": text[:4000]}
     if attachments:
@@ -111,9 +128,39 @@ async def send_message(
             timeout=aiohttp.ClientTimeout(total=30),
         ) as resp:
             if resp.ok:
-                return True
+                try:
+                    data = await resp.json()
+                    if isinstance(data, dict):
+                        return _message_id_from_response(data)
+                except Exception:
+                    logger.exception("Failed to parse send_message response")
+                return ""
             text_resp = await resp.text()
             logger.error("POST /messages %s: %s", resp.status, text_resp[:500])
+            return None
+
+
+async def edit_message(
+    message_id: str,
+    text: str,
+    *,
+    attachments: list[dict] | None = None,
+) -> bool:
+    body: dict[str, Any] = {"text": text[:4000]}
+    if attachments is not None:
+        body["attachments"] = attachments
+    async with aiohttp.ClientSession() as session:
+        async with session.put(
+            f"{MAX_API_URL}/messages",
+            headers=_auth_headers(),
+            params={"message_id": message_id},
+            json=body,
+            timeout=aiohttp.ClientTimeout(total=30),
+        ) as resp:
+            if resp.ok:
+                return True
+            text_resp = await resp.text()
+            logger.error("PUT /messages %s: %s", resp.status, text_resp[:500])
             return False
 
 
@@ -157,8 +204,8 @@ async def send_image_message(
         attachments.extend(extra_attachments)
 
     for attempt in range(3):
-        ok = await send_message(user_id=user_id, text=text, attachments=attachments)
-        if ok:
+        mid = await send_message(user_id=user_id, text=text, attachments=attachments)
+        if mid is not None:
             return True
         if attempt < 2:
             await asyncio.sleep(2 ** attempt + 2)
