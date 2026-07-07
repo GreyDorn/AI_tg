@@ -6,7 +6,8 @@ from config import IMAGE_MODELS
 from db.models import User
 from db.repository import update_user_image_model, set_waiting_for_image
 from bot.keyboards.main import image_models_keyboard, cancel_keyboard
-from bot.i18n import button_filter, format_cost, t
+from bot.i18n import button_filter, format_model_cost_suffix, t
+from config import MONETIZATION_ENABLED
 from llm.provider_status import get_available_image_models, resolve_image_model_key
 
 router = Router()
@@ -45,14 +46,14 @@ async def _show_image_models(
     available = get_available_image_models()
     current = available[model_key]
     hidden_note = ""
-    if len(available) < len(IMAGE_MODELS):
+    if MONETIZATION_ENABLED and len(available) < len(IMAGE_MODELS):
         hidden_note = t("image_models_hidden", lang)
 
     text = t(
         "image_models_title",
         lang,
         model=current.name,
-        cost=format_cost(current.cost_per_image, lang),
+        cost_suffix=format_model_cost_suffix(current.cost_per_image, lang),
         hidden_note=hidden_note,
     )
     markup = image_models_keyboard(model_key, lang)

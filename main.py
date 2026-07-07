@@ -4,7 +4,7 @@ import logging
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from config import BOT_TOKEN, ADMIN_ID
+from config import BOT_TOKEN, ADMIN_ID, MONETIZATION_ENABLED
 from db.repository import init_db, SessionFactory, grant_unlimited
 from llm.music_gen import is_pollinations_music_configured, is_music_feature_enabled
 from llm.provider_status import (
@@ -42,6 +42,8 @@ async def main() -> None:
         "Pollinations music: %s",
         "enabled" if is_music_feature_enabled() else "hidden (not free yet)",
     )
+
+    logger.info("Monetization: %s", "enabled" if MONETIZATION_ENABLED else "disabled (free for all)")
 
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     configure_openrouter_notifications(bot, ADMIN_ID)
