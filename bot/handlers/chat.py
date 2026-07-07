@@ -4,7 +4,7 @@ import logging
 from aiogram import Router, F
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
-from config import MODELS, MAX_CONTEXT_MESSAGES, DEFAULT_VISION_MODEL_KEY, DEFAULT_VISION_PROMPT, GEMINI_API_KEY, resolve_model_key
+from config import MODELS, MAX_CONTEXT_MESSAGES, DEFAULT_VISION_MODEL_KEY, DEFAULT_VISION_PROMPT, GEMINI_API_KEY, resolve_model_key, MONETIZATION_ENABLED
 from db.models import User
 from db.repository import (
     get_active_conversation,
@@ -214,7 +214,7 @@ async def _reply_streaming(
 
     await add_message(db_session, conv_id, "assistant", full_response)
 
-    if not vision_mode and not db_user.has_unlimited_access:
+    if MONETIZATION_ENABLED and not vision_mode and not db_user.has_unlimited_access:
         await db_session.refresh(db_user)
         if db_user.credits in (1, 2):
             await answer_low_credits_hint(message, db_user, db_user.credits, resolve_lang(db_user))

@@ -7,6 +7,7 @@ from aiogram import Bot
 from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest
 
 from config import (
+    MONETIZATION_ENABLED,
     DAILY_REMINDER_ENABLED,
     DAILY_REMINDER_HOUR_UTC,
     CHANNEL_POST_ENABLED,
@@ -173,6 +174,9 @@ async def _channel_post_loop(bot: Bot) -> None:
 
 
 def start_growth_background_tasks(bot: Bot) -> None:
+    if not MONETIZATION_ENABLED:
+        logger.info("Growth background tasks disabled (monetization off)")
+        return
     global _reminder_task, _channel_task
     if DAILY_REMINDER_ENABLED and (_reminder_task is None or _reminder_task.done()):
         _reminder_task = asyncio.create_task(_reminder_loop(bot))
