@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -102,3 +103,50 @@ async def send_message(
             text_resp = await resp.text()
             logger.error("POST /messages %s: %s", resp.status, text_resp[:500])
             return False
+
+
+async def upload_image_bytes(image_bytes: bytes, *, filename: str, mime_type: str) -> str:
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            f"{MAX_API_URL}/uploads",
+            headers={"Authorization": MAX_BOT_TOKEN},
+            params={"type": "image"},
+            timeout=aiohttp.ClientTimeout(total=30),
+        ) as resp:
+            resp.raise_for_status()
+            data = await resp.json()
+        upload_url = data.get("url")
+        if not upload_url:
+            raise RuntimeError(f"No upload URL: {data}")
+
+        form = aiohttp.FormData()
+        form.add_field("data", image_bytes, filename=filename, content_type=mime_type)
+        async with session.post(upload_url, data=form, timeout=aiohttp.ClientTimeout(total=120)) as up:
+            up.raise_for_status()
+            result = await up.json(content_type=None)
+        token = result.get("token") if isinstance(result, dict) else None
+        if not token:
+            raise RuntimeError(f"No token in upload response: {result}")
+
+    await asyncio.sleep(2)
+    return str(token)
+
+
+async def send_image_message(
+    *,
+    user_id: int,
+    text: str,
+    image_token: str,
+    extra_attachments: list[dict] | None = None,
+) -> bool:
+    attachments: list[dict] = [{"type": "image", "payload": {"token": image_token}}]
+    if extra_attachments:
+        attachments.extend(extra_attachments)
+
+    for attempt in range(3):
+        ok = await send_message(user_id=user_id, text=text, attachments=attachments)
+        if ok:
+            return True
+        if attempt < 2:
+            await asyncio.sleep(2 ** attempt + 1)
+    return False

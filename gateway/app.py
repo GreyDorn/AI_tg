@@ -23,6 +23,8 @@ from core.errors import classify_llm_error
 from core.types import LlmErrorKind
 from llm import get_llm
 from llm.gemini import GeminiLLM
+from llm.image_gen import generate_image, ImageGenerationError
+from llm.provider_status import resolve_image_model_key
 
 logging.basicConfig(
     level=logging.INFO,
@@ -197,11 +199,51 @@ async def vision(request: web.Request) -> web.Response:
     )
 
 
+async def image(request: web.Request) -> web.Response:
+    auth_error = _check_auth(request)
+    if auth_error:
+        return auth_error
+
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "invalid json"}, status=400)
+
+    prompt = str(data.get("prompt") or "").strip()
+    if not prompt:
+        return web.json_response({"error": "prompt required"}, status=400)
+    if len(prompt) > 1000:
+        return web.json_response({"error": "prompt too long"}, status=400)
+
+    model_key = resolve_image_model_key(str(data.get("model_key") or ""))
+
+    try:
+        image_bytes, mime_type = await generate_image(prompt, model_key)
+    except ImageGenerationError as exc:
+        logger.exception("Image error model=%s", model_key)
+        return web.json_response({"error": str(exc), "kind": "generic"}, status=502)
+    except Exception as exc:
+        logger.exception("Image error model=%s", model_key)
+        return web.json_response({"error": str(exc), "kind": "generic"}, status=502)
+
+    from config import IMAGE_MODELS
+    model_cfg = IMAGE_MODELS[model_key]
+    return web.json_response(
+        {
+            "image_base64": base64.b64encode(image_bytes).decode("ascii"),
+            "mime_type": mime_type,
+            "model_key": model_key,
+            "model_name": model_cfg.name,
+        }
+    )
+
+
 def create_app() -> web.Application:
     app = web.Application(client_max_size=16 * 1024 * 1024)
     app.router.add_get("/health", health)
     app.router.add_post("/v1/chat", chat)
     app.router.add_post("/v1/vision", vision)
+    app.router.add_post("/v1/image", image)
     return app
 
 

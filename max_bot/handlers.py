@@ -28,13 +28,22 @@ from max_bot.api import send_message, answer_callback
 from max_bot.gateway_client import GatewayError, complete_chat, complete_vision
 from max_bot.keyboards import models_keyboard, main_menu_keyboard
 from max_bot.media import find_image_url, download_bytes
+from max_bot.images import (
+    extract_image_intent_prompt,
+    show_image_models,
+    generate_and_send,
+    select_image_model,
+    set_image_waiting,
+)
+from llm.provider_status import resolve_image_model_key
 
 logger = logging.getLogger(__name__)
 
 WELCOME = (
     "Привет! Я AI-ассистент с моделями ChatGPT, DeepSeek, Gemini и Groq.\n\n"
-    "Напишите сообщение или отправьте фото с подписью — я отвечу.\n"
-    "Модели и настройки — кнопками ниже."
+    "• Напишите сообщение или отправьте фото с подписью\n"
+    "• «Модели чата» — выбор нейросети для текста\n"
+    "• «Модели картинок» / «Создать картинку» — генерация изображений"
 )
 
 
@@ -178,6 +187,52 @@ async def _handle_callback(callback_id: str | None, payload: str | None, sender:
         await _handle_clear(sender)
         return
 
+    if payload == "menu:image_models":
+        async with SessionFactory() as session:
+            user, _ = await get_or_create_user(
+                session, sender.user_id, sender.full_name, sender.username, language_code="ru",
+            )
+            current = resolve_image_model_key(user.current_image_model)
+            await set_image_waiting(session, user, True)
+        await show_image_models(sender.user_id, current)
+        return
+
+    if payload == "menu:create_image":
+        async with SessionFactory() as session:
+            user, _ = await get_or_create_user(
+                session, sender.user_id, sender.full_name, sender.username, language_code="ru",
+            )
+            await set_image_waiting(session, user, True)
+            from max_bot.keyboards import cancel_image_keyboard
+            from core.image import resolve_image_model
+            _, model_cfg = resolve_image_model(user)
+            await send_message(
+                user_id=sender.user_id,
+                text=f"Опишите, что нарисовать.\nМодель: {model_cfg.name}",
+                attachments=cancel_image_keyboard(),
+            )
+        return
+
+    if payload == "cancel:image":
+        async with SessionFactory() as session:
+            user, _ = await get_or_create_user(
+                session, sender.user_id, sender.full_name, sender.username, language_code="ru",
+            )
+            if user.waiting_for_image:
+                await set_image_waiting(session, user, False)
+                await _reply(sender.user_id, "Режим создания картинки отменён.")
+            else:
+                await _reply(sender.user_id, "Нечего отменять.")
+        return
+
+    if payload.startswith("imagemodel:"):
+        async with SessionFactory() as session:
+            user, _ = await get_or_create_user(
+                session, sender.user_id, sender.full_name, sender.username, language_code="ru",
+            )
+            await select_image_model(sender.user_id, session, user, payload.split(":", 1)[1])
+        return
+
     if payload.startswith("model:"):
         await _handle_model_select(sender, payload.split(":", 1)[1])
         return
@@ -299,10 +354,44 @@ async def _handle_command(sender: Sender, text: str) -> bool:
     if low in ("/help", "help", "помощь"):
         await _reply(
             sender.user_id,
-            "Напишите текст или отправьте фото с подписью.\n"
-            "Кнопка «Модели» — выбор нейросети.\n"
-            "Кнопка «Новый чат» — очистить контекст.",
+            "Текст — обычный чат.\n"
+            "Фото с подписью — распознавание.\n"
+            "«Модели чата» — LLM для текста.\n"
+            "«Модели картинок» — выбор Flux, Turbo и др.\n"
+            "«Создать картинку» — опишите, что нарисовать.\n"
+            "Или напишите: нарисуй закат над морем",
         )
+        return True
+
+    if low in ("/imagemodels", "модели картинок"):
+        async with SessionFactory() as session:
+            user, _ = await get_or_create_user(
+                session, sender.user_id, sender.full_name, sender.username, language_code="ru",
+            )
+            current = resolve_image_model_key(user.current_image_model)
+            await set_image_waiting(session, user, True)
+        await show_image_models(sender.user_id, current)
+        return True
+
+    if low.startswith("/image"):
+        parts = text.split(maxsplit=1)
+        prompt = parts[1].strip() if len(parts) > 1 else ""
+        async with SessionFactory() as session:
+            user, _ = await get_or_create_user(
+                session, sender.user_id, sender.full_name, sender.username, language_code="ru",
+            )
+            if not prompt:
+                await set_image_waiting(session, user, True)
+                from max_bot.keyboards import cancel_image_keyboard
+                from core.image import resolve_image_model
+                _, model_cfg = resolve_image_model(user)
+                await send_message(
+                    user_id=sender.user_id,
+                    text=f"Опишите, что нарисовать.\nМодель: {model_cfg.name}",
+                    attachments=cancel_image_keyboard(),
+                )
+            else:
+                await generate_and_send(sender.user_id, session, user, prompt)
         return True
 
     if low in ("/models", "models", "модели"):
@@ -356,8 +445,27 @@ async def process_update(update: dict) -> None:
     if not text:
         return
 
+    intent_prompt = extract_image_intent_prompt(text)
+    if intent_prompt:
+        async with SessionFactory() as session:
+            user, _ = await get_or_create_user(
+                session, sender.user_id, sender.full_name, sender.username, language_code="ru",
+            )
+            await generate_and_send(sender.user_id, session, user, intent_prompt)
+        return
+
+    async with SessionFactory() as session:
+        user, _ = await get_or_create_user(
+            session, sender.user_id, sender.full_name, sender.username, language_code="ru",
+        )
+        if user.waiting_for_image:
+            await generate_and_send(sender.user_id, session, user, text)
+            return
+
     if text.startswith("/") or text.lower() in (
-        "start", "старт", "привет", "help", "помощь", "models", "модели", "clear", "новый чат",
+        "start", "старт", "привет", "help", "помощь",
+        "models", "модели", "модели чата", "clear", "новый чат",
+        "создать картинку", "модели картинок",
     ):
         if await _handle_command(sender, text):
             return
