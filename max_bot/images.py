@@ -12,7 +12,8 @@ from db.models import User
 from db.repository import set_waiting_for_image, update_user_image_model, spend_credits
 from core.image import validate_prompt, sync_user_image_model
 from core.credits import can_afford
-from llm.provider_status import get_available_image_models
+from llm.provider_status import resolve_image_model_key
+from max_bot.keyboards import available_image_models
 from max_bot.api import upload_image_bytes, send_image_message, send_message
 from max_bot.gateway_client import GatewayError, generate_image as generate_via_gateway
 from max_bot.keyboards import image_models_keyboard, cancel_image_keyboard, main_menu_keyboard
@@ -121,7 +122,7 @@ async def generate_and_send(user_id: int, session: AsyncSession, user: User, pro
     caption = f"🎨 {model_name}\n{prompt[:800]}"
 
     try:
-        token = await upload_image_bytes(image_bytes, filename=f"image.{ext}", mime_type=mime_type)
+        image_payload = await upload_image_bytes(image_bytes, filename=f"image.{ext}", mime_type=mime_type)
     except Exception:
         logger.exception("MAX image upload failed user=%s", user.id)
         await send_message(user_id=user_id, text="❌ Картинка создана, но не отправилась. Попробуйте ещё раз.")
@@ -130,7 +131,7 @@ async def generate_and_send(user_id: int, session: AsyncSession, user: User, pro
     ok = await send_image_message(
         user_id=user_id,
         text=caption,
-        image_token=token,
+        image_payload=image_payload,
         extra_attachments=main_menu_keyboard(),
     )
     if not ok:
@@ -146,7 +147,7 @@ async def select_image_model(
     user: User,
     model_key: str,
 ) -> None:
-    available = get_available_image_models()
+    available = available_image_models()
     if model_key not in available:
         await send_message(user_id=user_id, text="Эта модель сейчас недоступна.")
         return

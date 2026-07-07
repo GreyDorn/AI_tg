@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from config import DEFAULT_MODEL, MODELS, MONETIZATION_ENABLED, resolve_model_key
+from config import DEFAULT_MODEL, MODELS, MONETIZATION_ENABLED, LLM_GATEWAY_URL, resolve_model_key
 from db.repository import (
     SessionFactory,
     get_or_create_user,
@@ -20,7 +20,6 @@ from core.chat import (
     save_assistant_message,
     setup_vision_chat,
     revert_user_model,
-    is_vision_available,
 )
 from core.credits import refund
 from core.types import LlmErrorKind
@@ -113,7 +112,7 @@ def _models_text(current_key: str) -> str:
 
 def _error_text(kind: LlmErrorKind, *, vision: bool = False) -> str:
     if kind == LlmErrorKind.VISION_UNAVAILABLE:
-        return "📷 Анализ фото недоступен (нет ключа Gemini на сервере)."
+        return "📷 Анализ фото временно недоступен. Попробуйте позже."
     if kind == LlmErrorKind.VISION_FAILED:
         return "❌ Не удалось разобрать фото. Попробуйте другое изображение или подпись короче."
     if kind == LlmErrorKind.RATE_LIMITED:
@@ -272,8 +271,8 @@ async def _handle_chat(sender: Sender, text: str) -> None:
 
 
 async def _handle_vision(sender: Sender, text: str, attachments: list[dict]) -> None:
-    if not is_vision_available():
-        await _reply(sender.user_id, _error_text(LlmErrorKind.VISION_UNAVAILABLE, vision=True))
+    if not LLM_GATEWAY_URL:
+        await _reply(sender.user_id, "📷 Анализ фото недоступен (шлюз не настроен).")
         return
 
     image_url, mime_type = find_image_url(attachments)

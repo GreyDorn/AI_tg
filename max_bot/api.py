@@ -55,9 +55,9 @@ async def register_webhook(url: str, secret: str = "") -> dict[str, Any]:
 
 async def answer_callback(callback_id: str, notification: str = "") -> None:
     params = {"callback_id": callback_id}
-    body: dict[str, str] | None = None
+    body: dict[str, str] = {}
     if notification:
-        body = {"notification": notification[:200]}
+        body["notification"] = notification[:200]
     async with aiohttp.ClientSession() as session:
         async with session.post(
             f"{MAX_API_URL}/answers",
@@ -69,6 +69,18 @@ async def answer_callback(callback_id: str, notification: str = "") -> None:
             if not resp.ok:
                 text = await resp.text()
                 logger.error("POST /answers %s: %s", resp.status, text[:500])
+
+
+def _image_payload_from_upload(result: dict) -> dict:
+    """MAX image upload returns {photos: {...}} instead of flat token."""
+    if not isinstance(result, dict):
+        raise RuntimeError(f"Invalid upload response: {result!r}")
+    if "photos" in result:
+        return {"photos": result["photos"]}
+    token = result.get("token")
+    if token:
+        return {"token": str(token)}
+    raise RuntimeError(f"No image token in upload response: {result!r}")
 
 
 async def send_message(
@@ -105,7 +117,8 @@ async def send_message(
             return False
 
 
-async def upload_image_bytes(image_bytes: bytes, *, filename: str, mime_type: str) -> str:
+async def upload_image_bytes(image_bytes: bytes, *, filename: str, mime_type: str) -> dict:
+    """Upload image to MAX, return attachment payload for POST /messages."""
     async with aiohttp.ClientSession() as session:
         async with session.post(
             f"{MAX_API_URL}/uploads",
@@ -124,22 +137,22 @@ async def upload_image_bytes(image_bytes: bytes, *, filename: str, mime_type: st
         async with session.post(upload_url, data=form, timeout=aiohttp.ClientTimeout(total=120)) as up:
             up.raise_for_status()
             result = await up.json(content_type=None)
-        token = result.get("token") if isinstance(result, dict) else None
-        if not token:
-            raise RuntimeError(f"No token in upload response: {result}")
+        if not isinstance(result, dict):
+            raise RuntimeError(f"Invalid upload response: {result!r}")
+        payload = _image_payload_from_upload(result)
 
     await asyncio.sleep(2)
-    return str(token)
+    return payload
 
 
 async def send_image_message(
     *,
     user_id: int,
     text: str,
-    image_token: str,
+    image_payload: dict,
     extra_attachments: list[dict] | None = None,
 ) -> bool:
-    attachments: list[dict] = [{"type": "image", "payload": {"token": image_token}}]
+    attachments: list[dict] = [{"type": "image", "payload": image_payload}]
     if extra_attachments:
         attachments.extend(extra_attachments)
 
@@ -148,5 +161,5 @@ async def send_image_message(
         if ok:
             return True
         if attempt < 2:
-            await asyncio.sleep(2 ** attempt + 1)
+            await asyncio.sleep(2 ** attempt + 2)
     return False
