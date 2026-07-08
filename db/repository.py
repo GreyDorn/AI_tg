@@ -12,7 +12,7 @@ from config import (
     STREAK_BONUS_START,
     STREAK_BONUS_MAX,
 )
-from db.models import Base, User, Conversation, Message, Payment
+from db.models import Base, User, Conversation, Message, Payment, ProcessedEvent, CreditCharge
 
 
 engine = create_async_engine(DATABASE_URL)
@@ -22,6 +22,8 @@ SessionFactory = async_sessionmaker(engine, expire_on_commit=False)
 async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    async with SessionFactory() as session:
+        await prune_processed_events(session)
         for column_sql in [
             "ALTER TABLE users ADD COLUMN is_unlimited INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE users ADD COLUMN subscription_until DATETIME",
@@ -36,9 +38,49 @@ async def init_db() -> None:
             "ALTER TABLE users ADD COLUMN language_code VARCHAR(8) NOT NULL DEFAULT 'en'",
         ]:
             try:
-                await conn.execute(text(column_sql))
+                async with engine.begin() as conn:
+                    await conn.execute(text(column_sql))
             except Exception:
                 pass  # Колонка уже существует
+
+
+# ── Idempotency ───────────────────────────────────────────────────────────────
+
+async def prune_processed_events(session: AsyncSession, *, days: int = 30) -> None:
+    cutoff = datetime.now() - timedelta(days=days)
+    await session.execute(delete(ProcessedEvent).where(ProcessedEvent.created_at < cutoff))
+    await session.commit()
+
+
+async def try_claim_event(session: AsyncSession, event_key: str, source: str) -> bool:
+    """Returns True if this event is new and claimed."""
+    try:
+        session.add(ProcessedEvent(event_key=event_key, source=source))
+        await session.commit()
+        return True
+    except IntegrityError:
+        await session.rollback()
+        return False
+
+
+async def get_credit_charge(session: AsyncSession, operation_key: str) -> CreditCharge | None:
+    return await session.get(CreditCharge, operation_key)
+
+
+async def record_credit_charge(
+    session: AsyncSession,
+    user_id: int,
+    operation_key: str,
+    amount: int,
+) -> bool:
+    """Record a charge. Returns False if operation_key already exists."""
+    try:
+        session.add(CreditCharge(operation_key=operation_key, user_id=user_id, amount=amount))
+        await session.commit()
+        return True
+    except IntegrityError:
+        await session.rollback()
+        return False
 
 
 # ── Users ──────────────────────────────────────────────────────────────────────
@@ -147,6 +189,27 @@ async def spend_credits(session: AsyncSession, user_id: int, amount: int) -> boo
         return False
     user.credits -= amount
     await session.commit()
+    return True
+
+
+async def spend_credits_idempotent(
+    session: AsyncSession,
+    user_id: int,
+    amount: int,
+    operation_key: str | None,
+) -> bool:
+    """Idempotent spend. True = paid or already paid for this operation_key."""
+    if operation_key:
+        existing = await get_credit_charge(session, operation_key)
+        if existing:
+            return True
+    if not await spend_credits(session, user_id, amount):
+        return False
+    if operation_key:
+        recorded = await record_credit_charge(session, user_id, operation_key, amount)
+        if not recorded:
+            await add_credits(session, user_id, amount)
+            return True
     return True
 
 

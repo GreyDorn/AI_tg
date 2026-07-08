@@ -4,7 +4,7 @@ import logging
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from config import BOT_TOKEN, ADMIN_ID
+from config import BOT_TOKEN, ADMIN_ID, MONETIZATION_ENABLED
 from db.repository import init_db, SessionFactory, grant_unlimited
 from llm.music_gen import is_pollinations_music_configured, is_music_feature_enabled
 from llm.provider_status import (
@@ -14,6 +14,7 @@ from llm.provider_status import (
 )
 from bot.background.growth_tasks import start_growth_background_tasks
 from bot.middlewares.user import UserMiddleware
+from bot.middlewares.idempotency import IdempotencyMiddleware
 from bot.middlewares.ratelimit import RateLimitMiddleware
 from bot.middlewares.processing_lock import ProcessingLockMiddleware
 from bot.handlers import start, chat, models, balance, admin, payment, image, image_models, music, music_models, invite
@@ -43,6 +44,8 @@ async def main() -> None:
         "enabled" if is_music_feature_enabled() else "hidden (not free yet)",
     )
 
+    logger.info("Monetization: %s", "enabled" if MONETIZATION_ENABLED else "disabled (free for all)")
+
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     configure_openrouter_notifications(bot, ADMIN_ID)
     start_openrouter_probe_loop()
@@ -54,6 +57,7 @@ async def main() -> None:
         await grant_unlimited(session, ADMIN_ID)
 
     # Middleware регистрируется на все update-события
+    dp.update.middleware(IdempotencyMiddleware())
     dp.update.middleware(UserMiddleware())
     dp.update.middleware(RateLimitMiddleware())
     dp.update.middleware(ProcessingLockMiddleware())

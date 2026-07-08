@@ -1,4 +1,5 @@
 from datetime import datetime
+from config import MONETIZATION_ENABLED
 from sqlalchemy import BigInteger, String, Integer, DateTime, ForeignKey, Text, Boolean, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -35,6 +36,8 @@ class User(Base):
     @property
     def has_unlimited_access(self) -> bool:
         """True если у пользователя безлимитный доступ (постоянный или по подписке)."""
+        if not MONETIZATION_ENABLED:
+            return True
         if self.is_unlimited:
             return True
         if self.subscription_until and self.subscription_until > datetime.now():
@@ -76,4 +79,25 @@ class Payment(Base):
     currency: Mapped[str] = mapped_column(String(8), default="XTR")
     payload: Mapped[str] = mapped_column(String(256))
     subscription_until: Mapped[datetime] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class ProcessedEvent(Base):
+    """Webhook / update deduplication (survives bot restart)."""
+
+    __tablename__ = "processed_events"
+
+    event_key: Mapped[str] = mapped_column(String(256), primary_key=True)
+    source: Mapped[str] = mapped_column(String(16))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class CreditCharge(Base):
+    """Idempotent credit spend per user action."""
+
+    __tablename__ = "credit_charges"
+
+    operation_key: Mapped[str] = mapped_column(String(256), primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"))
+    amount: Mapped[int] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

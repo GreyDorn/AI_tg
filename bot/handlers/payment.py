@@ -7,7 +7,7 @@ from aiogram.types import (
 )
 from aiogram.exceptions import TelegramAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
-from config import SUBSCRIPTION_PRICE_STARS, SUBSCRIPTION_DAYS, PREMIUM_BOT_STARS_URL, RATE_LIMIT_MESSAGES, RATE_LIMIT_WINDOW
+from config import SUBSCRIPTION_PRICE_STARS, SUBSCRIPTION_DAYS, PREMIUM_BOT_STARS_URL, RATE_LIMIT_MESSAGES, RATE_LIMIT_WINDOW, MONETIZATION_ENABLED
 from db.models import User
 from db.repository import process_subscription_payment
 from bot.keyboards.main import subscription_keyboard
@@ -31,6 +31,8 @@ def _is_subscription_payload(payload: str, user_id: int) -> bool:
 @router.message(Command("buy"))
 @router.message(button_filter("subscription"))
 async def cmd_buy(message: Message, db_user: User, lang: str = "en") -> None:
+    if not MONETIZATION_ENABLED:
+        return
     sub_status = ""
     if db_user.has_unlimited_access and db_user.subscription_until:
         sub_status = t(
@@ -56,6 +58,8 @@ async def cmd_buy(message: Message, db_user: User, lang: str = "en") -> None:
 
 @router.callback_query(F.data == "subscribe")
 async def process_subscribe_callback(callback: CallbackQuery, lang: str = "en") -> None:
+    if not MONETIZATION_ENABLED:
+        return
     if not callback.message:
         await callback.answer(t("pay_msg_not_found", lang), show_alert=True)
         return
@@ -100,6 +104,9 @@ async def process_subscribe_callback(callback: CallbackQuery, lang: str = "en") 
 
 @router.pre_checkout_query()
 async def pre_checkout(query: PreCheckoutQuery, lang: str = "en") -> None:
+    if not MONETIZATION_ENABLED:
+        await query.answer(ok=False, error_message=t("pay_invalid_order", lang))
+        return
     if not _is_subscription_payload(query.invoice_payload, query.from_user.id):
         await query.answer(
             ok=False,
@@ -114,6 +121,8 @@ async def pre_checkout(query: PreCheckoutQuery, lang: str = "en") -> None:
 async def successful_payment(
     message: Message, db_session: AsyncSession, db_user: User, lang: str = "en"
 ) -> None:
+    if not MONETIZATION_ENABLED:
+        return
     payment: SuccessfulPayment = message.successful_payment
 
     if not _is_subscription_payload(payment.invoice_payload, message.from_user.id):
@@ -161,6 +170,8 @@ async def successful_payment(
 
 @router.message(Command("paysupport"))
 async def cmd_paysupport(message: Message, lang: str = "en") -> None:
+    if not MONETIZATION_ENABLED:
+        return
     await message.answer(
         t("paysupport", lang, price=SUBSCRIPTION_PRICE_STARS, stars_url=PREMIUM_BOT_STARS_URL),
         parse_mode="HTML",
