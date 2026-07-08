@@ -24,6 +24,7 @@ from core.types import LlmErrorKind
 from llm import get_llm
 from llm.gemini import GeminiLLM
 from llm.image_gen import generate_image, ImageGenerationError
+from llm.provider_limits import get_provider_limits_text
 from llm.provider_status import resolve_image_model_key
 
 logging.basicConfig(
@@ -238,12 +239,27 @@ async def image(request: web.Request) -> web.Response:
     )
 
 
+async def provider_limits(request: web.Request) -> web.Response:
+    auth_error = _check_auth(request)
+    if auth_error:
+        return auth_error
+
+    try:
+        text = await get_provider_limits_text()
+    except Exception as exc:
+        logger.exception("provider limits failed")
+        return web.json_response({"error": str(exc)}, status=502)
+
+    return web.json_response({"text": text})
+
+
 def create_app() -> web.Application:
     app = web.Application(client_max_size=16 * 1024 * 1024)
     app.router.add_get("/health", health)
     app.router.add_post("/v1/chat", chat)
     app.router.add_post("/v1/vision", vision)
     app.router.add_post("/v1/image", image)
+    app.router.add_get("/v1/admin/provider-limits", provider_limits)
     return app
 
 

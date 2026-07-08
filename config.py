@@ -292,6 +292,7 @@ MAX_API_URL: str = os.getenv("MAX_API_URL", "https://platform-api2.max.ru")
 MAX_WEBHOOK_SECRET: str = os.getenv("MAX_WEBHOOK_SECRET", "")
 MAX_WEBHOOK_URL: str = os.getenv("MAX_WEBHOOK_URL", "")
 MAX_BOT_PORT: int = int(os.getenv("MAX_BOT_PORT", "8090"))
+MAX_ADMIN_ID: int = int(os.getenv("MAX_ADMIN_ID", "0"))
 LLM_GATEWAY_URL: str = os.getenv("LLM_GATEWAY_URL", "")
 
 # Growth automation

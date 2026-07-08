@@ -132,3 +132,29 @@ async def generate_image(
                 str(data.get("model_key") or model_key),
                 str(data.get("model_name") or model_key),
             )
+
+
+async def fetch_provider_limits() -> str | None:
+    if not LLM_GATEWAY_URL or not GATEWAY_INTERNAL_KEY:
+        return None
+
+    url = f"{LLM_GATEWAY_URL.rstrip('/')}/v1/admin/provider-limits"
+    headers = {"X-Internal-Key": GATEWAY_INTERNAL_KEY}
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                url,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=45),
+            ) as resp:
+                if resp.status != 200:
+                    logger.warning("provider-limits gateway %s", resp.status)
+                    return None
+                data = await resp.json(content_type=None)
+                if isinstance(data, dict):
+                    text = str(data.get("text") or "").strip()
+                    return text or None
+    except Exception:
+        logger.exception("Failed to fetch provider limits from gateway")
+    return None

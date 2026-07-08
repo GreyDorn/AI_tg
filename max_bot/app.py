@@ -10,8 +10,8 @@ from collections import OrderedDict
 
 from aiohttp import web
 
-from config import MAX_BOT_PORT, MAX_WEBHOOK_SECRET
-from db.repository import init_db
+from config import MAX_BOT_PORT, MAX_WEBHOOK_SECRET, MAX_ADMIN_ID
+from db.repository import SessionFactory, init_db, grant_unlimited
 from max_bot.handlers import process_update
 
 logging.basicConfig(
@@ -97,6 +97,11 @@ def create_app() -> web.Application:
 async def main() -> None:
     await init_db()
     logger.info("MAX bot database initialized")
+
+    if MAX_ADMIN_ID:
+        async with SessionFactory() as session:
+            await grant_unlimited(session, MAX_ADMIN_ID)
+        logger.info("Granted unlimited access to MAX admin %s", MAX_ADMIN_ID)
 
     app = create_app()
     runner = web.AppRunner(app)

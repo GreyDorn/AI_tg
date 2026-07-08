@@ -28,6 +28,7 @@ from max_bot.api import send_message, edit_message, answer_callback
 from max_bot.gateway_client import GatewayError, complete_chat, complete_vision
 from max_bot.keyboards import models_keyboard, main_menu_keyboard
 from max_bot.media import find_image_url, download_bytes
+from max_bot.admin import handle_stats
 from max_bot.images import (
     extract_image_intent_prompt,
     show_image_models,
@@ -461,6 +462,10 @@ async def _handle_command(sender: Sender, text: str) -> bool:
         await _handle_clear(sender)
         return True
 
+    if low in ("/stats", "stats", "статистика"):
+        await handle_stats(sender.user_id)
+        return True
+
     return False
 
 
@@ -511,7 +516,7 @@ async def process_update(update: dict) -> None:
     if text.startswith("/") or text.lower() in (
         "start", "старт", "привет", "help", "помощь",
         "models", "модели", "модели чата", "clear", "новый чат",
-        "создать картинку", "модели картинок",
+        "создать картинку", "модели картинок", "stats", "статистика",
     ):
         if await _handle_command(sender, text):
             return
