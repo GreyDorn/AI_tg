@@ -6,12 +6,11 @@ import asyncio
 import hmac
 import logging
 import sys
-from collections import OrderedDict
 
 from aiohttp import web
 
 from config import MAX_BOT_PORT, MAX_WEBHOOK_SECRET, MAX_ADMIN_ID
-from db.repository import SessionFactory, init_db, grant_unlimited
+from db.repository import SessionFactory, init_db, grant_unlimited, try_claim_event
 from max_bot.handlers import process_update
 
 logging.basicConfig(
@@ -21,34 +20,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-_seen: OrderedDict[str, None] = OrderedDict()
-_seen_max = 500
 
-
-def _remember_event(key: str | None) -> bool:
-    if not key:
-        return False
-    if key in _seen:
-        return True
-    _seen[key] = None
-    while len(_seen) > _seen_max:
-        _seen.popitem(last=False)
-    return False
-
-
-def _event_key(update: dict) -> str | None:
+def event_key(update: dict) -> str | None:
     update_type = update.get("update_type") or "unknown"
     message = update.get("message") or {}
     body = message.get("body") or {}
     mid = body.get("mid")
     if mid:
-        return f"{update_type}:{mid}"
+        return f"max:{update_type}:{mid}"
     callback = update.get("callback") or {}
     callback_id = callback.get("callback_id")
     if callback_id:
-        return f"{update_type}:{callback_id}"
+        return f"max:{update_type}:{callback_id}"
     ts = update.get("timestamp")
-    return f"{update_type}:{ts}" if ts is not None else None
+    return f"max:{update_type}:{ts}" if ts is not None else None
 
 
 async def health(_request: web.Request) -> web.Response:
@@ -72,19 +57,21 @@ async def webhook(request: web.Request) -> web.Response:
     if not isinstance(data, dict):
         return web.json_response({"ok": True})
 
-    key = _event_key(data)
-    if _remember_event(key):
-        return web.json_response({"ok": True, "duplicate": True})
+    key = event_key(data)
+    if key:
+        async with SessionFactory() as session:
+            if not await try_claim_event(session, key, "max"):
+                return web.json_response({"ok": True, "duplicate": True})
 
-    asyncio.create_task(_process_safe(data))
+    asyncio.create_task(_process_safe(data, key))
     return web.json_response({"ok": True})
 
 
-async def _process_safe(update: dict) -> None:
+async def _process_safe(update: dict, event_key_value: str | None) -> None:
     try:
-        await process_update(update)
+        await process_update(update, event_key=event_key_value)
     except Exception:
-        logger.exception("Error processing MAX update")
+        logger.exception("Error processing MAX update event_key=%s", event_key_value)
 
 
 def create_app() -> web.Application:

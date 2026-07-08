@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import DEFAULT_IMAGE_MODEL, IMAGE_MODELS
 from db.models import User
-from db.repository import set_waiting_for_image, update_user_image_model, spend_credits
+from db.repository import set_waiting_for_image, update_user_image_model, spend_credits_idempotent
 from core.image import validate_prompt
 from core.credits import can_afford
 from max_bot.keyboards import available_image_models
@@ -84,7 +84,14 @@ async def show_image_models(user_id: int, current_key: str) -> None:
     )
 
 
-async def generate_and_send(user_id: int, session: AsyncSession, user: User, prompt: str) -> None:
+async def generate_and_send(
+    user_id: int,
+    session: AsyncSession,
+    user: User,
+    prompt: str,
+    *,
+    operation_key: str | None = None,
+) -> None:
     model_key, model_cfg = await ensure_free_image_model(session, user)
 
     if not validate_prompt(prompt):
@@ -129,7 +136,7 @@ async def generate_and_send(user_id: int, session: AsyncSession, user: User, pro
         return
 
     if cost > 0 and not user.has_unlimited_access:
-        spent = await spend_credits(session, user.id, cost)
+        spent = await spend_credits_idempotent(session, user.id, cost, operation_key)
         if not spent:
             await send_message(user_id=user_id, text="Не удалось списать запросы.")
             return

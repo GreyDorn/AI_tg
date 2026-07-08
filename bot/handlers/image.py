@@ -89,6 +89,8 @@ async def _generate_and_send(
     db_session: AsyncSession,
     db_user: User,
     prompt: str,
+    *,
+    operation_key: str | None = None,
 ) -> None:
     lang = resolve_lang(db_user)
     model_key, model_cfg = resolve_image_model(db_user)
@@ -120,7 +122,9 @@ async def _generate_and_send(
     await message.bot.send_chat_action(message.chat.id, "upload_photo")
 
     try:
-        result = await generate_for_user(db_session, db_user, prompt)
+        result = await generate_for_user(
+            db_session, db_user, prompt, operation_key=operation_key,
+        )
     except ImageGenerationError as exc:
         logger.error("Image generation failed user=%s model=%s: %s", db_user.id, model_key, exc)
         if str(exc) == "INSUFFICIENT_CREDITS":
@@ -200,13 +204,16 @@ async def cmd_image(
     command: CommandObject,
     db_session: AsyncSession,
     db_user: User,
+    idempotency_key: str | None = None,
 ) -> None:
     prompt = (command.args or "").strip()
     if not prompt:
         await _set_waiting(db_session, db_user, True)
         await _show_image_help(message, db_user, waiting=True)
         return
-    await _generate_and_send(message, db_session, db_user, prompt)
+    await _generate_and_send(
+        message, db_session, db_user, prompt, operation_key=idempotency_key,
+    )
 
 
 @router.message(button_filter("create_image"))
@@ -225,11 +232,14 @@ async def image_intent_message(
     message: Message,
     db_session: AsyncSession,
     db_user: User,
+    idempotency_key: str | None = None,
 ) -> None:
     prompt = _extract_image_intent_prompt(message.text or "")
     if not prompt:
         return
-    await _generate_and_send(message, db_session, db_user, prompt)
+    await _generate_and_send(
+        message, db_session, db_user, prompt, operation_key=idempotency_key,
+    )
 
 
 @router.message(F.text & ~F.text.startswith("/") & ~F.text.in_(MENU_BUTTONS), WaitingForImageFilter())
@@ -237,5 +247,8 @@ async def image_prompt_followup(
     message: Message,
     db_session: AsyncSession,
     db_user: User,
+    idempotency_key: str | None = None,
 ) -> None:
-    await _generate_and_send(message, db_session, db_user, message.text.strip())
+    await _generate_and_send(
+        message, db_session, db_user, message.text.strip(), operation_key=idempotency_key,
+    )

@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import IMAGE_MODELS
 from db.models import User
-from db.repository import spend_credits, update_user_image_model
+from db.repository import spend_credits_idempotent, update_user_image_model
 from llm.image_gen import generate_image, ImageGenerationError
 from llm.provider_status import resolve_image_model_key
 from core.credits import can_afford
@@ -36,6 +36,8 @@ async def generate_for_user(
     session: AsyncSession,
     user: User,
     prompt: str,
+    *,
+    operation_key: str | None = None,
 ) -> ImageGenerationResult:
     model_key, model_cfg = await sync_user_image_model(session, user)
     cost = model_cfg.cost_per_image
@@ -54,7 +56,7 @@ async def generate_for_user(
 
     credits_spent = 0
     if cost > 0 and not user.has_unlimited_access:
-        spent = await spend_credits(session, user.id, cost)
+        spent = await spend_credits_idempotent(session, user.id, cost, operation_key)
         if not spent:
             raise ImageGenerationError("SPEND_FAILED")
         credits_spent = cost

@@ -28,6 +28,7 @@ from max_bot.api import send_message, edit_message, answer_callback
 from max_bot.gateway_client import GatewayError, complete_chat, complete_vision
 from max_bot.keyboards import models_keyboard, main_menu_keyboard
 from max_bot.media import find_image_url, download_bytes
+from max_bot.processing_lock import try_acquire, release
 from max_bot.admin import handle_stats
 from max_bot.images import (
     extract_image_intent_prompt,
@@ -258,46 +259,57 @@ async def _handle_callback(callback_id: str | None, payload: str | None, sender:
         return
 
 
-async def _handle_chat(sender: Sender, text: str) -> None:
-    async with SessionFactory() as session:
-        user, _ = await get_or_create_user(
-            session, sender.user_id, sender.full_name, sender.username, language_code="ru",
-        )
-        await clear_waiting_modes(session, user.id)
+async def _handle_chat(sender: Sender, text: str, *, operation_key: str | None = None) -> None:
+    if not await try_acquire(sender.user_id):
+        return
+    try:
+        async with SessionFactory() as session:
+            user, _ = await get_or_create_user(
+                session, sender.user_id, sender.full_name, sender.username, language_code="ru",
+            )
+            await clear_waiting_modes(session, user.id)
 
-        setup = await setup_text_chat(session, user, text)
-        if setup is None:
-            await _reply(sender.user_id, "Недостаточно запросов.")
+            setup = await setup_text_chat(session, user, text, operation_key=operation_key)
+            if setup is None:
+                await _reply(sender.user_id, "Недостаточно запросов.")
+                return
+
+            messages = [{"role": m.role, "content": m.content} for m in setup.context]
+            user_id = user.id
+
+        status_id = await _send_status(sender.user_id, "⏳")
+
+        try:
+            answer = await complete_chat(setup.model_key, messages)
+        except GatewayError as exc:
+            async with SessionFactory() as session:
+                if setup.credits_spent:
+                    await refund(session, user_id, setup.credits_spent)
+            await _finish_status(sender.user_id, status_id, _error_text(exc.kind))
+            return
+        except Exception:
+            logger.exception("Gateway chat failed user=%s", sender.user_id)
+            async with SessionFactory() as session:
+                if setup.credits_spent:
+                    await refund(session, user_id, setup.credits_spent)
+            await _finish_status(sender.user_id, status_id, _error_text(LlmErrorKind.GENERIC))
             return
 
-        messages = [{"role": m.role, "content": m.content} for m in setup.context]
-        user_id = user.id
-
-    status_id = await _send_status(sender.user_id, "⏳")
-
-    try:
-        answer = await complete_chat(setup.model_key, messages)
-    except GatewayError as exc:
         async with SessionFactory() as session:
-            if setup.credits_spent:
-                await refund(session, user_id, setup.credits_spent)
-        await _finish_status(sender.user_id, status_id, _error_text(exc.kind))
-        return
-    except Exception:
-        logger.exception("Gateway chat failed user=%s", sender.user_id)
-        async with SessionFactory() as session:
-            if setup.credits_spent:
-                await refund(session, user_id, setup.credits_spent)
-        await _finish_status(sender.user_id, status_id, _error_text(LlmErrorKind.GENERIC))
-        return
+            await save_assistant_message(session, setup.conv_id, answer)
 
-    async with SessionFactory() as session:
-        await save_assistant_message(session, setup.conv_id, answer)
-
-    await _finish_status(sender.user_id, status_id, answer)
+        await _finish_status(sender.user_id, status_id, answer)
+    finally:
+        release(sender.user_id)
 
 
-async def _handle_vision(sender: Sender, text: str, attachments: list[dict]) -> None:
+async def _handle_vision(
+    sender: Sender,
+    text: str,
+    attachments: list[dict],
+    *,
+    operation_key: str | None = None,
+) -> None:
     if not LLM_GATEWAY_URL:
         await _reply(sender.user_id, "📷 Анализ фото недоступен (шлюз не настроен).")
         return
@@ -320,73 +332,79 @@ async def _handle_vision(sender: Sender, text: str, attachments: list[dict]) -> 
         await _reply(sender.user_id, _error_text(LlmErrorKind.VISION_FAILED, vision=True))
         return
 
-    async with SessionFactory() as session:
-        user, _ = await get_or_create_user(
-            session, sender.user_id, sender.full_name, sender.username, language_code="ru",
-        )
-        await clear_waiting_modes(session, user.id)
+    if not await try_acquire(sender.user_id):
+        return
+    try:
+        async with SessionFactory() as session:
+            user, _ = await get_or_create_user(
+                session, sender.user_id, sender.full_name, sender.username, language_code="ru",
+            )
+            await clear_waiting_modes(session, user.id)
 
-        setup = await setup_vision_chat(
-            session,
-            user,
-            caption=text or None,
-            image_bytes=image_bytes,
-            mime_type=mime_type,
+            setup = await setup_vision_chat(
+                session,
+                user,
+                caption=text or None,
+                image_bytes=image_bytes,
+                mime_type=mime_type,
+                operation_key=operation_key,
+            )
+            if setup is None:
+                await _reply(sender.user_id, "Недостаточно запросов.")
+                return
+
+            context = [{"role": m.role, "content": m.content} for m in setup.context]
+            vision_name = setup.vision_name
+            conv_id = setup.conv_id
+            revert_model_key = setup.revert_model_key
+            credits_spent = setup.credits_spent
+            vision_key = setup.vision_key
+            prompt = setup.prompt
+
+        status_id = await _send_status(
+            sender.user_id,
+            f"📷 Анализирую через {vision_name}…",
         )
-        if setup is None:
-            await _reply(sender.user_id, "Недостаточно запросов.")
+
+        try:
+            answer = await complete_vision(
+                vision_key,
+                context,
+                image_bytes=image_bytes,
+                mime_type=mime_type,
+                prompt=prompt,
+            )
+        except GatewayError as exc:
+            async with SessionFactory() as session:
+                user, _ = await get_or_create_user(
+                    session, sender.user_id, sender.full_name, sender.username, language_code="ru",
+                )
+                await revert_user_model(session, user, revert_model_key)
+                if credits_spent:
+                    await refund(session, user.id, credits_spent)
+            await _finish_status(sender.user_id, status_id, _error_text(exc.kind, vision=True))
+            return
+        except Exception:
+            logger.exception("Gateway vision failed user=%s", sender.user_id)
+            async with SessionFactory() as session:
+                user, _ = await get_or_create_user(
+                    session, sender.user_id, sender.full_name, sender.username, language_code="ru",
+                )
+                await revert_user_model(session, user, revert_model_key)
+                if credits_spent:
+                    await refund(session, user.id, credits_spent)
+            await _finish_status(sender.user_id, status_id, _error_text(LlmErrorKind.GENERIC, vision=True))
             return
 
-        context = [{"role": m.role, "content": m.content} for m in setup.context]
-        vision_name = setup.vision_name
-        conv_id = setup.conv_id
-        revert_model_key = setup.revert_model_key
-        credits_spent = setup.credits_spent
-        vision_key = setup.vision_key
-        prompt = setup.prompt
-
-    status_id = await _send_status(
-        sender.user_id,
-        f"📷 Анализирую через {vision_name}…",
-    )
-
-    try:
-        answer = await complete_vision(
-            vision_key,
-            context,
-            image_bytes=image_bytes,
-            mime_type=mime_type,
-            prompt=prompt,
-        )
-    except GatewayError as exc:
         async with SessionFactory() as session:
-            user, _ = await get_or_create_user(
-                session, sender.user_id, sender.full_name, sender.username, language_code="ru",
-            )
-            await revert_user_model(session, user, revert_model_key)
-            if credits_spent:
-                await refund(session, user.id, credits_spent)
-        await _finish_status(sender.user_id, status_id, _error_text(exc.kind, vision=True))
-        return
-    except Exception:
-        logger.exception("Gateway vision failed user=%s", sender.user_id)
-        async with SessionFactory() as session:
-            user, _ = await get_or_create_user(
-                session, sender.user_id, sender.full_name, sender.username, language_code="ru",
-            )
-            await revert_user_model(session, user, revert_model_key)
-            if credits_spent:
-                await refund(session, user.id, credits_spent)
-        await _finish_status(sender.user_id, status_id, _error_text(LlmErrorKind.GENERIC, vision=True))
-        return
+            await save_assistant_message(session, conv_id, answer)
 
-    async with SessionFactory() as session:
-        await save_assistant_message(session, conv_id, answer)
-
-    await _finish_status(sender.user_id, status_id, answer)
+        await _finish_status(sender.user_id, status_id, answer)
+    finally:
+        release(sender.user_id)
 
 
-async def _handle_command(sender: Sender, text: str) -> bool:
+async def _handle_command(sender: Sender, text: str, *, event_key: str | None = None) -> bool:
     low = text.lower().strip()
 
     if low in ("/start", "start", "старт", "привет"):
@@ -438,7 +456,14 @@ async def _handle_command(sender: Sender, text: str) -> bool:
                     attachments=cancel_image_keyboard(),
                 )
             else:
-                await generate_and_send(sender.user_id, session, user, prompt)
+                if not await try_acquire(sender.user_id):
+                    return True
+                try:
+                    await generate_and_send(
+                        sender.user_id, session, user, prompt, operation_key=event_key,
+                    )
+                finally:
+                    release(sender.user_id)
         return True
 
     if low in ("/models", "models", "модели"):
@@ -469,7 +494,7 @@ async def _handle_command(sender: Sender, text: str) -> bool:
     return False
 
 
-async def process_update(update: dict) -> None:
+async def process_update(update: dict, *, event_key: str | None = None) -> None:
     started = _extract_bot_started(update)
     if started is not None:
         async with SessionFactory() as session:
@@ -490,7 +515,7 @@ async def process_update(update: dict) -> None:
 
     image_url, _ = find_image_url(attachments)
     if image_url:
-        await _handle_vision(sender, text, attachments)
+        await _handle_vision(sender, text, attachments, operation_key=event_key)
         return
 
     if not text:
@@ -502,7 +527,14 @@ async def process_update(update: dict) -> None:
             user, _ = await get_or_create_user(
                 session, sender.user_id, sender.full_name, sender.username, language_code="ru",
             )
-            await generate_and_send(sender.user_id, session, user, intent_prompt)
+            if not await try_acquire(sender.user_id):
+                return
+            try:
+                await generate_and_send(
+                    sender.user_id, session, user, intent_prompt, operation_key=event_key,
+                )
+            finally:
+                release(sender.user_id)
         return
 
     async with SessionFactory() as session:
@@ -510,7 +542,14 @@ async def process_update(update: dict) -> None:
             session, sender.user_id, sender.full_name, sender.username, language_code="ru",
         )
         if user.waiting_for_image:
-            await generate_and_send(sender.user_id, session, user, text)
+            if not await try_acquire(sender.user_id):
+                return
+            try:
+                await generate_and_send(
+                    sender.user_id, session, user, text, operation_key=event_key,
+                )
+            finally:
+                release(sender.user_id)
             return
 
     if text.startswith("/") or text.lower() in (
@@ -518,7 +557,7 @@ async def process_update(update: dict) -> None:
         "models", "модели", "модели чата", "clear", "новый чат",
         "создать картинку", "модели картинок", "stats", "статистика",
     ):
-        if await _handle_command(sender, text):
+        if await _handle_command(sender, text, event_key=event_key):
             return
 
-    await _handle_chat(sender, text)
+    await _handle_chat(sender, text, operation_key=event_key)

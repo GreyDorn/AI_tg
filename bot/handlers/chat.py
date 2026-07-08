@@ -197,11 +197,19 @@ async def _reply_streaming(
 
 
 @router.message(F.text & ~F.text.startswith("/") & ~F.text.in_(all_menu_button_texts()))
-async def handle_message(message: Message, db_session: AsyncSession, db_user: User, lang: str = "en") -> None:
+async def handle_message(
+    message: Message,
+    db_session: AsyncSession,
+    db_user: User,
+    lang: str = "en",
+    idempotency_key: str | None = None,
+) -> None:
     if db_user.waiting_for_image or db_user.waiting_for_music:
         return
 
-    setup = await setup_text_chat(db_session, db_user, message.text)
+    setup = await setup_text_chat(
+        db_session, db_user, message.text, operation_key=idempotency_key,
+    )
     if setup is None:
         await answer_out_of_credits(message, db_user, lang)
         return
@@ -224,7 +232,13 @@ async def handle_message(message: Message, db_session: AsyncSession, db_user: Us
 
 
 @router.message(F.photo)
-async def handle_photo(message: Message, db_session: AsyncSession, db_user: User, lang: str = "en") -> None:
+async def handle_photo(
+    message: Message,
+    db_session: AsyncSession,
+    db_user: User,
+    lang: str = "en",
+    idempotency_key: str | None = None,
+) -> None:
     exited_image_mode = db_user.waiting_for_image
     if db_user.waiting_for_image:
         await clear_waiting_modes(db_session, db_user.id)
@@ -253,6 +267,7 @@ async def handle_photo(message: Message, db_session: AsyncSession, db_user: User
         caption=message.caption,
         image_bytes=image_bytes,
         mime_type=mime_type,
+        operation_key=idempotency_key,
     )
     if setup is None:
         await answer_out_of_credits(message, db_user, lang)

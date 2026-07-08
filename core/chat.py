@@ -69,6 +69,8 @@ async def setup_text_chat(
     session: AsyncSession,
     user: User,
     text: str,
+    *,
+    operation_key: str | None = None,
 ) -> TextChatSetup | None:
     """Prepare DB state for a text message. Returns None if credits denied."""
     model_key = await sync_user_model_key(session, user)
@@ -93,7 +95,7 @@ async def setup_text_chat(
             len(all_messages),
         )
 
-    credit = await charge(session, user, model_cfg.cost_per_message)
+    credit = await charge(session, user, model_cfg.cost_per_message, operation_key=operation_key)
     if credit.status == CreditStatus.DENIED:
         return None
 
@@ -122,6 +124,7 @@ async def setup_vision_chat(
     caption: str | None,
     image_bytes: bytes,
     mime_type: str,
+    operation_key: str | None = None,
 ) -> VisionChatSetup | None:
     """Returns setup or None on credit denial (reverts model switch if needed)."""
     vision_key, vision_cfg = vision_model_for_user(user)
@@ -145,7 +148,7 @@ async def setup_vision_chat(
     all_messages = await get_conversation_messages(session, conv.id)
     context = all_messages[:-1][-MAX_CONTEXT_MESSAGES:]
 
-    credit = await charge(session, user, vision_cfg.cost_per_message)
+    credit = await charge(session, user, vision_cfg.cost_per_message, operation_key=operation_key)
     if credit.status == CreditStatus.DENIED:
         await revert_user_model(session, user, revert_model_key)
         return None

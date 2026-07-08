@@ -23,15 +23,14 @@ class ProcessingLockMiddleware(BaseMiddleware):
         if not tg_user:
             return await handler(event, data)
 
-        # Применяем только к обычным текстовым сообщениям (не командам)
+        # Применяем к текстовым сообщениям и фото (LLM-запросы)
         raw = getattr(event, "message", None)
-        is_chat_message = (
-            isinstance(raw, Message)
-            and raw.text
-            and not raw.text.startswith("/")
+        is_llm_message = isinstance(raw, Message) and (
+            (raw.text and not raw.text.startswith("/"))
+            or bool(raw.photo)
         )
 
-        if not is_chat_message:
+        if not is_llm_message:
             return await handler(event, data)
 
         user_id = tg_user.id

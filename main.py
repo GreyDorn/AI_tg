@@ -14,6 +14,7 @@ from llm.provider_status import (
 )
 from bot.background.growth_tasks import start_growth_background_tasks
 from bot.middlewares.user import UserMiddleware
+from bot.middlewares.idempotency import IdempotencyMiddleware
 from bot.middlewares.ratelimit import RateLimitMiddleware
 from bot.middlewares.processing_lock import ProcessingLockMiddleware
 from bot.handlers import start, chat, models, balance, admin, payment, image, image_models, music, music_models, invite
@@ -56,6 +57,7 @@ async def main() -> None:
         await grant_unlimited(session, ADMIN_ID)
 
     # Middleware регистрируется на все update-события
+    dp.update.middleware(IdempotencyMiddleware())
     dp.update.middleware(UserMiddleware())
     dp.update.middleware(RateLimitMiddleware())
     dp.update.middleware(ProcessingLockMiddleware())
