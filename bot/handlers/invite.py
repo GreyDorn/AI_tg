@@ -1,8 +1,9 @@
 import logging
-from aiogram import Router, F
+from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
+from config import MONETIZATION_ENABLED
 from db.models import User
 from db.repository import count_referrals, get_referral_leaderboard
 from bot.keyboards.main import growth_keyboard
@@ -21,6 +22,9 @@ async def cmd_invite(
     db_user: User,
     lang: str = "en",
 ) -> None:
+    if not MONETIZATION_ENABLED:
+        return
+
     bot_info = await message.bot.get_me()
     ref_count = await count_referrals(db_session, db_user.id)
     ref_link = referral_link(bot_info.username, db_user.id)
@@ -40,6 +44,9 @@ async def cmd_invite(
 
 @router.message(Command("top"))
 async def cmd_top(message: Message, db_session: AsyncSession, lang: str = "en") -> None:
+    if not MONETIZATION_ENABLED:
+        return
+
     bot_info = await message.bot.get_me()
     entries = await get_referral_leaderboard(db_session, limit=10)
     await message.answer(

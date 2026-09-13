@@ -4,13 +4,12 @@ from aiogram import Router, F
 from aiogram.filters import Command, CommandObject, BaseFilter
 from aiogram.types import Message, BufferedInputFile, CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
-from config import IMAGE_MODELS
 from db.models import User
-from db.repository import spend_credits, update_user_image_model, set_waiting_for_image
-from llm.image_gen import generate_image, ImageGenerationError
-from llm.provider_status import resolve_image_model_key
+from db.repository import set_waiting_for_image
+from llm.image_gen import ImageGenerationError
+from core.image import generate_for_user, resolve_image_model, validate_prompt, sync_user_image_model
 from bot.keyboards.main import image_models_keyboard, cancel_keyboard, image_share_keyboard
-from bot.i18n import all_menu_button_texts, button_filter, format_cost, image_viral_footer, resolve_lang, t
+from bot.i18n import all_menu_button_texts, button_filter, format_model_cost_suffix, image_viral_footer, resolve_lang, t
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -58,15 +57,6 @@ def _extension_for_mime(mime_type: str) -> str:
     }.get(mime_type, "png")
 
 
-def _format_cost(cost: int, lang: str) -> str:
-    return format_cost(cost, lang)
-
-
-def _get_image_model(db_user: User) -> tuple[str, object]:
-    model_key = resolve_image_model_key(db_user.current_image_model)
-    return model_key, IMAGE_MODELS[model_key]
-
-
 async def _set_waiting(
     db_session: AsyncSession,
     db_user: User,
@@ -80,13 +70,13 @@ async def _set_waiting(
 
 async def _show_image_help(message: Message, db_user: User, waiting: bool = False, lang: str | None = None) -> None:
     lang = lang or resolve_lang(db_user)
-    model_key, model_cfg = _get_image_model(db_user)
-    cost = _format_cost(model_cfg.cost_per_image, lang)
+    model_key, model_cfg = resolve_image_model(db_user)
+    cost_suffix = format_model_cost_suffix(model_cfg.cost_per_image, lang)
 
     if waiting:
-        text = t("image_help_waiting", lang, model=model_cfg.name, cost=cost)
+        text = t("image_help_waiting", lang, model=model_cfg.name, cost_suffix=cost_suffix)
     else:
-        text = t("image_help", lang, model=model_cfg.name, cost=cost)
+        text = t("image_help", lang, model=model_cfg.name, cost_suffix=cost_suffix)
     await message.answer(
         text,
         parse_mode="HTML",
@@ -100,38 +90,28 @@ async def _generate_and_send(
     db_user: User,
     prompt: str,
 ) -> None:
-    model_key, model_cfg = _get_image_model(db_user)
-    if model_key != db_user.current_image_model:
-        db_user.current_image_model = model_key
-        await update_user_image_model(db_session, db_user.id, model_key)
-    cost = model_cfg.cost_per_image
-
-    logger.info(
-        "Image request user=%s model=%s prompt=%r",
-        db_user.id,
-        model_key,
-        prompt[:120],
-    )
-
     lang = resolve_lang(db_user)
+    model_key, model_cfg = resolve_image_model(db_user)
 
-    if len(prompt) > 1000:
+    if not validate_prompt(prompt):
         await message.answer(t("image_prompt_too_long", lang))
         return
 
-    if cost > 0 and db_user.credits < cost and not db_user.has_unlimited_access:
+    if model_cfg.cost_per_image > 0 and db_user.credits < model_cfg.cost_per_image and not db_user.has_unlimited_access:
         await message.answer(
             t(
                 "image_not_enough",
                 lang,
                 model=model_cfg.name,
-                cost=cost,
+                cost=model_cfg.cost_per_image,
                 credits=db_user.credits,
             ),
             parse_mode="HTML",
             reply_markup=image_models_keyboard(model_key, lang),
         )
         return
+
+    await sync_user_image_model(db_session, db_user)
 
     status = await message.answer(
         t("image_drawing", lang, model=model_cfg.name),
@@ -140,9 +120,25 @@ async def _generate_and_send(
     await message.bot.send_chat_action(message.chat.id, "upload_photo")
 
     try:
-        image_bytes, mime_type = await generate_image(prompt, model_key)
+        result = await generate_for_user(db_session, db_user, prompt)
     except ImageGenerationError as exc:
         logger.error("Image generation failed user=%s model=%s: %s", db_user.id, model_key, exc)
+        if str(exc) == "INSUFFICIENT_CREDITS":
+            await status.edit_text(
+                t(
+                    "image_not_enough",
+                    lang,
+                    model=model_cfg.name,
+                    cost=model_cfg.cost_per_image,
+                    credits=db_user.credits,
+                ),
+                parse_mode="HTML",
+                reply_markup=image_models_keyboard(model_key, lang),
+            )
+            return
+        if str(exc) == "SPEND_FAILED":
+            await status.edit_text(t("image_spend_failed", lang))
+            return
         error_text = str(exc)
         if "429" in error_text or "quota" in error_text.lower() or "rate" in error_text.lower():
             user_message = t("image_busy", lang)
@@ -159,16 +155,10 @@ async def _generate_and_send(
         await status.edit_text(t("image_failed_later", lang))
         return
 
-    if cost > 0 and not db_user.has_unlimited_access:
-        spent = await spend_credits(db_session, db_user.id, cost)
-        if not spent:
-            await status.edit_text(t("image_spend_failed", lang))
-            return
-
-    ext = _extension_for_mime(mime_type)
+    ext = _extension_for_mime(result.mime_type)
     bot_info = await message.bot.get_me()
     viral = image_viral_footer(bot_info.username, lang)
-    caption = f"🎨 {model_cfg.name}\n{prompt[:800]}{viral}"
+    caption = f"🎨 {result.model_name}\n{prompt[:800]}{viral}"
 
     try:
         await status.delete()
@@ -177,7 +167,7 @@ async def _generate_and_send(
 
     try:
         await message.answer_photo(
-            BufferedInputFile(image_bytes, filename=f"image.{ext}"),
+            BufferedInputFile(result.image_bytes, filename=f"image.{ext}"),
             caption=caption,
             reply_markup=image_share_keyboard(bot_info.username, db_user.id, lang),
         )

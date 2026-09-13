@@ -68,7 +68,7 @@ MODELS: Dict[str, LLMModel] = {
     ),
     "gpt-oss-20b": LLMModel(
         id="openai/gpt-oss-20b",
-        name="ChatGPT OSS 20B (Free)",
+        name="ChatGPT OSS 20B",
         provider="groq",
         description="OpenAI open model — fast, free via Groq",
         cost_per_message=1,
@@ -76,7 +76,7 @@ MODELS: Dict[str, LLMModel] = {
     ),
     "gpt-oss-120b": LLMModel(
         id="openai/gpt-oss-120b",
-        name="ChatGPT OSS 120B (Free)",
+        name="ChatGPT OSS 120B",
         provider="groq",
         description="OpenAI flagship open model — free via Groq",
         cost_per_message=1,
@@ -134,14 +134,14 @@ IMAGE_MODELS: Dict[str, ImageModel] = {
     ),
     "flux-free": ImageModel(
         id="flux",
-        name="Flux (Free)",
+        name="Flux",
         provider="pollinations",
         description="Free generation, good quality",
         cost_per_image=0,
     ),
     "turbo-free": ImageModel(
         id="zimage",
-        name="Turbo (Free)",
+        name="Turbo",
         provider="pollinations",
         description="Fast generation (Z-Image Turbo)",
         cost_per_image=0,
@@ -223,7 +223,7 @@ REFERRAL_MILESTONES = [
 ]
 
 # Viral: append to generated image captions (use {bot_username} placeholder)
-IMAGE_VIRAL_FOOTER = "\n\n✨ Free AI art → @{bot_username}"
+IMAGE_VIRAL_FOOTER = "\n\n✨ AI art → @{bot_username}"
 
 # Dialog context
 MAX_CONTEXT_MESSAGES = 30

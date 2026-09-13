@@ -3,7 +3,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from config import MODELS, SUBSCRIPTION_PRICE_STARS, STARS_TOPUP_URL
 from llm.provider_status import get_available_image_models, get_available_music_models
 from llm.music_gen import is_music_feature_enabled
-from bot.i18n import btn, inline, format_cost, DEFAULT_LANG
+from bot.i18n import btn, inline, format_cost, format_model_cost_suffix, DEFAULT_LANG
 
 
 def main_menu(lang: str = DEFAULT_LANG) -> ReplyKeyboardMarkup:
@@ -15,10 +15,12 @@ def main_menu(lang: str = DEFAULT_LANG) -> ReplyKeyboardMarkup:
         keyboard.append(
             [KeyboardButton(text=btn("create_music", lang)), KeyboardButton(text=btn("music_models", lang))]
         )
-    keyboard.extend([
-        [KeyboardButton(text=btn("balance", lang)), KeyboardButton(text=btn("referral", lang))],
-        [KeyboardButton(text=btn("subscription", lang))],
-    ])
+    from config import MONETIZATION_ENABLED
+    if MONETIZATION_ENABLED:
+        keyboard.extend([
+            [KeyboardButton(text=btn("balance", lang)), KeyboardButton(text=btn("referral", lang))],
+            [KeyboardButton(text=btn("subscription", lang))],
+        ])
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
 
 
@@ -39,9 +41,10 @@ def image_models_keyboard(current_model: str, lang: str = DEFAULT_LANG) -> Inlin
     builder = InlineKeyboardBuilder()
     for key, model in get_available_image_models().items():
         mark = "✅ " if key == current_model else ""
-        cost = format_cost(model.cost_per_image, lang)
+        cost_suffix = format_model_cost_suffix(model.cost_per_image, lang)
+        label = f"{mark}{model.name}{cost_suffix}" if cost_suffix else f"{mark}{model.name}"
         builder.button(
-            text=f"{mark}{model.name} ({cost})",
+            text=label,
             callback_data=f"imagemodel:{key}",
         )
     builder.adjust(1)
