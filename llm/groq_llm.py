@@ -15,6 +15,10 @@ THINKING_TAGS = (
 
 COMPOUND_MODEL_IDS = frozenset({"groq/compound", "groq/compound-mini"})
 GPT_OSS_MODEL_IDS = frozenset({"openai/gpt-oss-20b", "openai/gpt-oss-120b"})
+QWEN_MODEL_IDS = frozenset({"qwen/qwen3.6-27b", "qwen/qwen3.8-27b"})
+# Groq on_demand OTPM rejects high max_tokens on Qwen (429 before generation).
+QWEN_MAX_TOKENS = 1024
+DEFAULT_MAX_TOKENS = 4096
 COMPOUND_SYSTEM_PROMPT = (
     CHAT_SYSTEM_PROMPT + "\n\n"
     "Reply with only the final answer. "
@@ -45,10 +49,13 @@ class GroqLLM(BaseLLM):
             "model": model_id,
             "messages": history,
             "stream": True,
-            "max_tokens": 4096,
+            "max_tokens": QWEN_MAX_TOKENS if model_id in QWEN_MODEL_IDS else DEFAULT_MAX_TOKENS,
         }
         if model_id in GPT_OSS_MODEL_IDS and disable_thinking:
             request_kwargs["include_reasoning"] = False
+        if model_id in QWEN_MODEL_IDS and disable_thinking:
+            request_kwargs["reasoning_effort"] = "none"
+            request_kwargs["reasoning_format"] = "hidden"
 
         stream = await self.client.chat.completions.create(**request_kwargs)
 
