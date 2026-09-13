@@ -10,6 +10,7 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 REMOTE="${DEPLOY_REMOTE:-root@151.243.180.58}"
 REMOTE_DIR="${DEPLOY_REMOTE_DIR:-/root/tg_AI}"
 SERVICE_NAME="${DEPLOY_SERVICE_NAME:-tg_ai_bot.service}"
+GATEWAY_SERVICE_NAME="${DEPLOY_GATEWAY_SERVICE_NAME:-llm_gateway.service}"
 PYTHON="${DEPLOY_PYTHON:-python3}"
 
 RSYNC_OPTS=(-avz --delete
@@ -47,6 +48,10 @@ fi
 ${PYTHON} -c "import asyncio; from db.repository import init_db; asyncio.run(init_db())"
 systemctl restart "${SERVICE_NAME}"
 systemctl is-active "${SERVICE_NAME}"
+if systemctl is-active --quiet "${GATEWAY_SERVICE_NAME}"; then
+  systemctl restart "${GATEWAY_SERVICE_NAME}"
+  systemctl is-active "${GATEWAY_SERVICE_NAME}"
+fi
 EOF
 
 echo "Deploy complete."
