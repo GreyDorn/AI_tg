@@ -69,6 +69,12 @@ fi
 
 if systemctl is-active --quiet "$GATEWAY_SERVICE_NAME"; then
   systemctl restart "$GATEWAY_SERVICE_NAME"
+  sleep 2
+  if ! systemctl is-active --quiet "$GATEWAY_SERVICE_NAME"; then
+    echo "WARNING: $GATEWAY_SERVICE_NAME failed after restart"
+    journalctl -u "$GATEWAY_SERVICE_NAME" -n 40 --no-pager || true
+    "$PYTHON" -c "from gateway.app import create_app; print('gateway import ok')" 2>&1 || true
+  fi
 fi
 
 echo "$REMOTE_SHA" > "$STATE_FILE"
