@@ -5,6 +5,7 @@ from aiogram import F
 from aiogram.types import User as TgUser
 
 from db.models import User
+from config import MONETIZATION_ENABLED
 
 LANGS = ("en", "ru")
 DEFAULT_LANG = "en"
@@ -42,6 +43,12 @@ BUTTONS: dict[str, dict[str, str]] = {
     "subscription": {"en": "💎 Subscription", "ru": "💎 Подписка"},
 }
 
+_MENU_BUTTON_KEYS = (
+    "new_chat", "models", "create_image", "image_models",
+    "create_music", "music_models",
+)
+_MONETIZATION_BUTTON_KEYS = ("balance", "referral", "subscription")
+
 INLINE = {
     "cancel": {"en": "❌ Cancel", "ru": "❌ Отмена"},
     "cancel_music": {"en": "❌ Cancel", "ru": "❌ Отмена"},
@@ -64,7 +71,7 @@ def inline(key: str, lang: str, **fmt) -> str:
 
 
 def all_menu_button_texts() -> frozenset[str]:
-    return frozenset(v for d in BUTTONS.values() for v in d.values())
+    return frozenset(btn(key, lang) for key in BUTTONS for lang in LANGS)
 
 
 def button_filter(key: str):
@@ -72,6 +79,8 @@ def button_filter(key: str):
 
 
 def format_cost(cost: int, lang: str) -> str:
+    if not MONETIZATION_ENABLED:
+        return ""
     if cost == 0:
         return t("cost_free", lang)
     if cost == 1:
@@ -79,20 +88,33 @@ def format_cost(cost: int, lang: str) -> str:
     return t("cost_many", lang, cost=cost)
 
 
+def format_model_cost_suffix(cost: int, lang: str) -> str:
+    """Returns ' (1 request)' or '' when monetization is off."""
+    label = format_cost(cost, lang)
+    return f" ({label})" if label else ""
+
+
+def visible_menu_button_keys() -> tuple[str, ...]:
+    keys = list(_MENU_BUTTON_KEYS)
+    if MONETIZATION_ENABLED:
+        keys.extend(_MONETIZATION_BUTTON_KEYS)
+    return tuple(keys)
+
+
 SHARE_TEXT = {
     "en": (
-        "🤖 Free AI in Telegram — ChatGPT, Gemini, DeepSeek, photo analysis & image generation. "
+        "🤖 AI in Telegram — ChatGPT, Gemini, DeepSeek, photo analysis & image generation. "
         "Works right here, no install. Try it:"
     ),
     "ru": (
-        "🤖 Бесплатный AI в Telegram — ChatGPT, Gemini, DeepSeek, анализ фото и генерация картинок. "
+        "🤖 AI в Telegram — ChatGPT, Gemini, DeepSeek, анализ фото и генерация картинок. "
         "Работает прямо здесь. Попробуй:"
     ),
 }
 
 IMAGE_SHARE_TEXT = {
-    "en": "🎨 I made this with a free AI bot in Telegram — try it yourself:",
-    "ru": "🎨 Я сделал это в бесплатном AI-боте в Telegram — попробуй:",
+    "en": "🎨 I made this with an AI bot in Telegram — try it yourself:",
+    "ru": "🎨 Я сделал это в AI-боте в Telegram — попробуй:",
 }
 
 
@@ -127,8 +149,30 @@ MESSAGES: dict[str, dict[str, str]] = {
     "cost_one": {"en": "1 request", "ru": "1 запрос"},
     "cost_many": {"en": "{cost} requests", "ru": "{cost} запросов"},
     "image_viral_footer": {
-        "en": "\n\n✨ Free AI art → @{bot_username}",
-        "ru": "\n\n✨ Бесплатный AI-арт → @{bot_username}",
+        "en": "\n\n✨ AI art → @{bot_username}",
+        "ru": "\n\n✨ AI-арт → @{bot_username}",
+    },
+    "start_welcome_free": {
+        "en": (
+            "👋 <b>Hey, {name}!</b>\n\n"
+            "I'm an AI assistant with <b>multiple models</b>:\n"
+            "Llama, Gemini, DeepSeek and more.\n\n"
+            "<b>Try now:</b>\n"
+            "• Send any question in chat 💬\n"
+            "• Send a photo — Gemini will analyze it 📷\n"
+            "• Create images with /image 🎨{music_line}\n"
+            "• Pick a model in 🤖 Models"
+        ),
+        "ru": (
+            "👋 <b>Привет, {name}!</b>\n\n"
+            "Я AI-ассистент с <b>несколькими моделями</b>:\n"
+            "Llama, Gemini, DeepSeek и другие.\n\n"
+            "<b>Попробуй:</b>\n"
+            "• Напиши любой вопрос в чат 💬\n"
+            "• Отправь фото — Gemini проанализирует 📷\n"
+            "• Создай картинку через /image 🎨{music_line}\n"
+            "• Выбери модель в 🤖 Модели"
+        ),
     },
     "start_welcome": {
         "en": (
@@ -444,6 +488,18 @@ MESSAGES: dict[str, dict[str, str]] = {
             "📷 — читает фото в чате (Gemini)"
         ),
     },
+    "models_choose_free": {
+        "en": (
+            "🤖 <b>Choose a Model</b>\n\n"
+            "Current: <b>{current}</b>\n\n"
+            "📷 — can read photos in chat (Gemini)"
+        ),
+        "ru": (
+            "🤖 <b>Выбери модель</b>\n\n"
+            "Сейчас: <b>{current}</b>\n\n"
+            "📷 — читает фото в чате (Gemini)"
+        ),
+    },
     "model_unknown": {"en": "Unknown model.", "ru": "Неизвестная модель."},
     "model_already": {"en": "This model is already selected ✅", "ru": "Эта модель уже выбрана ✅"},
     "model_switched": {"en": "✅ Switched to {name}", "ru": "✅ Переключено на {name}"},
@@ -518,6 +574,36 @@ MESSAGES: dict[str, dict[str, str]] = {
             "• +{bonus} за каждого друга (бонусы → безлимит)\n"
             "• Топ: /top\n\n"
             "💎 <b>Безлимитная подписка</b> — {price} ⭐ в месяц"
+        ),
+    },
+    "help_free": {
+        "en": (
+            "<b>📚 Help</b>\n\n"
+            "<b>Commands:</b>\n"
+            "/start — main menu\n"
+            "/newchat — start a new conversation\n"
+            "/models — choose a text model\n"
+            "/image — create an image\n"
+            "/imagemodels — choose image model\n"
+            "{music_commands}"
+            "/help — this help message\n\n"
+            "<b>Text models:</b>\n{models_text}\n\n"
+            "<b>Image models:</b>\n{image_models_text}\n\n"
+            "{music_section}"
+        ),
+        "ru": (
+            "<b>📚 Справка</b>\n\n"
+            "<b>Команды:</b>\n"
+            "/start — главное меню\n"
+            "/newchat — новый диалог\n"
+            "/models — выбор текстовой модели\n"
+            "/image — создать картинку\n"
+            "/imagemodels — модели для картинок\n"
+            "{music_commands}"
+            "/help — эта справка\n\n"
+            "<b>Текстовые модели:</b>\n{models_text}\n\n"
+            "<b>Модели картинок:</b>\n{image_models_text}\n\n"
+            "{music_section}"
         ),
     },
     "help_music_commands": {
@@ -728,13 +814,13 @@ MESSAGES: dict[str, dict[str, str]] = {
     "image_help_waiting": {
         "en": (
             "🎨 <b>Describe your image in one message</b>\n\n"
-            "Model: <b>{model}</b> ({cost})\n"
+            "Model: <b>{model}</b>{cost_suffix}\n"
             "Example: <code>astronaut cat on the Moon</code>\n\n"
             "Change model → /imagemodels"
         ),
         "ru": (
             "🎨 <b>Опиши картинку в одном сообщении</b>\n\n"
-            "Модель: <b>{model}</b> ({cost})\n"
+            "Модель: <b>{model}</b>{cost_suffix}\n"
             "Пример: <code>кот-астронавт на Луне</code>\n\n"
             "Сменить модель → /imagemodels"
         ),
@@ -742,14 +828,14 @@ MESSAGES: dict[str, dict[str, str]] = {
     "image_help": {
         "en": (
             "🎨 <b>Image Generation</b>\n\n"
-            "Model: <b>{model}</b> ({cost})\n\n"
+            "Model: <b>{model}</b>{cost_suffix}\n\n"
             "Send a command:\n"
             "<code>/image astronaut cat on the Moon</code>\n\n"
             "Change model → /imagemodels"
         ),
         "ru": (
             "🎨 <b>Генерация картинок</b>\n\n"
-            "Модель: <b>{model}</b> ({cost})\n\n"
+            "Модель: <b>{model}</b>{cost_suffix}\n\n"
             "Отправь команду:\n"
             "<code>/image кот-астронавт на Луне</code>\n\n"
             "Сменить модель → /imagemodels"
@@ -819,13 +905,13 @@ MESSAGES: dict[str, dict[str, str]] = {
     "image_models_title": {
         "en": (
             "🖼 <b>Image Models</b>\n\n"
-            "Current: <b>{model}</b> ({cost})\n\n"
+            "Current: <b>{model}</b>{cost_suffix}\n\n"
             "Pick a model or just describe your image in the <b>next message</b> 👇"
             "{hidden_note}"
         ),
         "ru": (
             "🖼 <b>Модели картинок</b>\n\n"
-            "Сейчас: <b>{model}</b> ({cost})\n\n"
+            "Сейчас: <b>{model}</b>{cost_suffix}\n\n"
             "Выбери модель или опиши картинку в <b>следующем сообщении</b> 👇"
             "{hidden_note}"
         ),

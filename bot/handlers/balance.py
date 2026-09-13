@@ -2,7 +2,7 @@ from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
-from config import REFERRAL_BONUS_CREDITS, DAILY_FREE_CREDITS
+from config import REFERRAL_BONUS_CREDITS, DAILY_FREE_CREDITS, MONETIZATION_ENABLED
 from db.models import User
 from db.repository import claim_daily_credits
 from bot.keyboards.main import referral_keyboard, growth_keyboard
@@ -59,6 +59,8 @@ async def cmd_balance(
     db_user: User,
     lang: str = "en",
 ) -> None:
+    if not MONETIZATION_ENABLED:
+        return
     got_daily, streak_bonus = await claim_daily_credits(db_session, db_user.id)
     await _send_balance(message, db_session, db_user, got_daily=got_daily, streak_bonus=streak_bonus, lang=lang)
 
@@ -70,6 +72,8 @@ async def claim_daily_callback(
     db_user: User,
     lang: str = "en",
 ) -> None:
+    if not MONETIZATION_ENABLED:
+        return
     if db_user.has_unlimited_access:
         await callback.answer(t("claim_already_unlimited", lang), show_alert=True)
         return

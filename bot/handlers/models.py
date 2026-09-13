@@ -2,7 +2,7 @@ from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
-from config import MODELS, resolve_model_key
+from config import MODELS, resolve_model_key, MONETIZATION_ENABLED
 from db.models import User
 from db.repository import update_user_model, create_conversation, clear_waiting_modes
 from bot.keyboards.main import models_keyboard
@@ -26,7 +26,11 @@ async def _show_models(
         db_user.current_model = resolved
         await update_user_model(db_session, db_user.id, resolved)
 
-    text = t("models_choose", lang, current=MODELS[db_user.current_model].name)
+    text = t(
+        "models_choose" if MONETIZATION_ENABLED else "models_choose_free",
+        lang,
+        current=MODELS[db_user.current_model].name,
+    )
     markup = models_keyboard(db_user.current_model)
 
     if isinstance(target, CallbackQuery):
