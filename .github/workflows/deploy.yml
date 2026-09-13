@@ -20,3 +20,4 @@ jobs:
             export APP_DIR="${{ secrets.DEPLOY_APP_DIR || '/root/tg_AI' }}"
             export SERVICE_NAME="${{ secrets.DEPLOY_SERVICE_NAME || 'tg_ai_bot.service' }}"
             bash "$APP_DIR/scripts/server-auto-deploy.sh"
+            systemctl is-active llm_gateway.service || journalctl -u llm_gateway.service -n 50 --no-pager || true
