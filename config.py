@@ -188,6 +188,9 @@ DEFAULT_MUSIC_MODEL = "elevenmusic-free"
 # False: music via Pollinations requires paid pollen (no free API yet)
 MUSIC_FEATURE_ENABLED = False
 
+# False: hide payments, credits, referrals — bot is free for everyone
+MONETIZATION_ENABLED: bool = os.getenv("MONETIZATION_ENABLED", "false").lower() in ("1", "true", "yes")
+
 # Subscription
 SUBSCRIPTION_PRICE_STARS = 299   # price in Telegram Stars
 SUBSCRIPTION_DAYS = 30           # duration in days
@@ -249,7 +252,21 @@ OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_PROBE_INTERVAL: int = int(os.getenv("OPENROUTER_PROBE_INTERVAL", "1800"))
 DEEPSEEK_API_KEY: str = os.getenv("DEEPSEEK_API_KEY", "")
 POLLINATIONS_API_KEY: str = os.getenv("POLLINATIONS_API_KEY", "")
-DATABASE_URL: str = "sqlite+aiosqlite:///bot.db"
+DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///bot.db")
+
+# LLM gateway (DE VPS) — internal API for MAX bot on RU VPS
+GATEWAY_INTERNAL_KEY: str = os.getenv("GATEWAY_INTERNAL_KEY", "")
+GATEWAY_HOST: str = os.getenv("GATEWAY_HOST", "0.0.0.0")
+GATEWAY_PORT: int = int(os.getenv("GATEWAY_PORT", "8787"))
+
+# MAX messenger bot (RU VPS)
+MAX_BOT_TOKEN: str = os.getenv("MAX_BOT_TOKEN", "")
+MAX_API_URL: str = os.getenv("MAX_API_URL", "https://platform-api2.max.ru")
+MAX_WEBHOOK_SECRET: str = os.getenv("MAX_WEBHOOK_SECRET", "")
+MAX_WEBHOOK_URL: str = os.getenv("MAX_WEBHOOK_URL", "")
+MAX_BOT_PORT: int = int(os.getenv("MAX_BOT_PORT", "8090"))
+MAX_ADMIN_ID: int = int(os.getenv("MAX_ADMIN_ID", "0"))
+LLM_GATEWAY_URL: str = os.getenv("LLM_GATEWAY_URL", "")
 
 # Growth automation
 DAILY_REMINDER_ENABLED: bool = os.getenv("DAILY_REMINDER_ENABLED", "true").lower() in ("1", "true", "yes")
