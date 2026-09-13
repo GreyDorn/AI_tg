@@ -18,12 +18,12 @@ ROUTES: dict[str, list[tuple[str, str]]] = {
     "deepseek-chat": [
         ("direct", "deepseek-chat"),
         ("openrouter", "deepseek/deepseek-chat"),
-        ("groq", "llama-3.3-70b-versatile"),
+        ("groq", "openai/gpt-oss-120b"),
     ],
     "deepseek-reasoner": [
         ("direct", "deepseek-reasoner"),
         ("openrouter", "deepseek/deepseek-r1"),
-        ("groq", "qwen/qwen3-32b"),
+        ("groq", "qwen/qwen3.6-27b"),
     ],
 }
 

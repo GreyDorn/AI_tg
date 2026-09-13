@@ -34,42 +34,21 @@ MODELS: Dict[str, LLMModel] = {
         cost_per_message=1,
         supports_vision=True,
     ),
-    "llama-3.3-70b": LLMModel(
-        id="llama-3.3-70b-versatile",
-        name="Llama 3.3 70B",
-        provider="groq",
-        description="Powerful open model by Meta (ultra-fast)",
-        cost_per_message=1,
-    ),
-    "llama-3.1-8b": LLMModel(
-        id="llama-3.1-8b-instant",
-        name="Llama 3.1 8B",
-        provider="groq",
-        description="Lightweight & very fast model",
-        cost_per_message=1,
-    ),
-    "qwen3-32b": LLMModel(
-        id="qwen/qwen3-32b",
-        name="Qwen3 32B",
-        provider="groq",
-        description="Powerful model by Alibaba",
-        cost_per_message=1,
-        disable_thinking=True,
-    ),
     "qwen3-27b": LLMModel(
         id="qwen/qwen3.6-27b",
         name="Qwen3.6 27B",
         provider="groq",
-        description="New Alibaba model (faster & smarter)",
+        description="Alibaba model (fast & smart)",
         cost_per_message=1,
         disable_thinking=True,
     ),
-    "llama-4-scout": LLMModel(
-        id="meta-llama/llama-4-scout-17b-16e-instruct",
-        name="Llama 4 Scout",
+    "qwen3.8-27b": LLMModel(
+        id="qwen/qwen3.8-27b",
+        name="Qwen3.8 27B",
         provider="groq",
-        description="Latest Meta Llama 4 model",
+        description="Latest Alibaba model (smarter & faster)",
         cost_per_message=1,
+        disable_thinking=True,
     ),
     "compound": LLMModel(
         id="groq/compound",
@@ -103,26 +82,20 @@ MODELS: Dict[str, LLMModel] = {
         cost_per_message=1,
         disable_thinking=True,
     ),
-    "deepseek-v3": LLMModel(
-        id="deepseek-chat",
-        name="DeepSeek V3",
-        provider="deepseek",
-        description="DeepSeek's powerful general-purpose model",
-        cost_per_message=1,
-    ),
-    "deepseek-r1": LLMModel(
-        id="deepseek-reasoner",
-        name="DeepSeek R1",
-        provider="deepseek",
-        description="DeepSeek's advanced reasoning model",
-        cost_per_message=1,
-    ),
 }
 
-DEFAULT_MODEL = "llama-3.3-70b"
+DEFAULT_MODEL = "gpt-oss-120b"
 DEFAULT_VISION_MODEL_KEY = "gemini-2.5-flash-lite"
 MODEL_KEY_ALIASES: Dict[str, str] = {
     "gemini-2.0-flash": "gemini-2.5-flash-lite",
+    # Models removed from Groq (Enterprise-only or deprecated) → remap to default
+    "llama-3.3-70b": DEFAULT_MODEL,
+    "llama-3.1-8b": DEFAULT_MODEL,
+    "qwen3-32b": DEFAULT_MODEL,
+    "llama-4-scout": DEFAULT_MODEL,
+    # DeepSeek removed (balance=0 on all backends)
+    "deepseek-v3": DEFAULT_MODEL,
+    "deepseek-r1": DEFAULT_MODEL,
 }
 DEFAULT_VISION_PROMPT = "What is shown in this image? Describe it in detail."
 
@@ -215,6 +188,9 @@ DEFAULT_MUSIC_MODEL = "elevenmusic-free"
 # False: music via Pollinations requires paid pollen (no free API yet)
 MUSIC_FEATURE_ENABLED = False
 
+# False: hide payments, credits, referrals — bot is free for everyone
+MONETIZATION_ENABLED: bool = os.getenv("MONETIZATION_ENABLED", "false").lower() in ("1", "true", "yes")
+
 # Subscription
 SUBSCRIPTION_PRICE_STARS = 299   # price in Telegram Stars
 SUBSCRIPTION_DAYS = 30           # duration in days
@@ -276,7 +252,21 @@ OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_PROBE_INTERVAL: int = int(os.getenv("OPENROUTER_PROBE_INTERVAL", "1800"))
 DEEPSEEK_API_KEY: str = os.getenv("DEEPSEEK_API_KEY", "")
 POLLINATIONS_API_KEY: str = os.getenv("POLLINATIONS_API_KEY", "")
-DATABASE_URL: str = "sqlite+aiosqlite:///bot.db"
+DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///bot.db")
+
+# LLM gateway (DE VPS) — internal API for MAX bot on RU VPS
+GATEWAY_INTERNAL_KEY: str = os.getenv("GATEWAY_INTERNAL_KEY", "")
+GATEWAY_HOST: str = os.getenv("GATEWAY_HOST", "0.0.0.0")
+GATEWAY_PORT: int = int(os.getenv("GATEWAY_PORT", "8787"))
+
+# MAX messenger bot (RU VPS)
+MAX_BOT_TOKEN: str = os.getenv("MAX_BOT_TOKEN", "")
+MAX_API_URL: str = os.getenv("MAX_API_URL", "https://platform-api2.max.ru")
+MAX_WEBHOOK_SECRET: str = os.getenv("MAX_WEBHOOK_SECRET", "")
+MAX_WEBHOOK_URL: str = os.getenv("MAX_WEBHOOK_URL", "")
+MAX_BOT_PORT: int = int(os.getenv("MAX_BOT_PORT", "8090"))
+MAX_ADMIN_ID: int = int(os.getenv("MAX_ADMIN_ID", "0"))
+LLM_GATEWAY_URL: str = os.getenv("LLM_GATEWAY_URL", "")
 
 # Growth automation
 DAILY_REMINDER_ENABLED: bool = os.getenv("DAILY_REMINDER_ENABLED", "true").lower() in ("1", "true", "yes")
