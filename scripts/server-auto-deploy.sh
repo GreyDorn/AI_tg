@@ -5,6 +5,7 @@ set -euo pipefail
 
 APP_DIR="${APP_DIR:-/root/tg_AI}"
 SERVICE_NAME="${SERVICE_NAME:-tg_ai_bot.service}"
+GATEWAY_SERVICE_NAME="${GATEWAY_SERVICE_NAME:-llm_gateway.service}"
 PYTHON="${PYTHON:-python3}"
 REPO="${GITHUB_REPO:-GreyDorn/AI_tg}"
 BRANCH="${DEPLOY_BRANCH:-main}"
@@ -64,6 +65,10 @@ fi
 
 if systemctl is-active --quiet "$SERVICE_NAME"; then
   systemctl restart "$SERVICE_NAME"
+fi
+
+if systemctl is-active --quiet "$GATEWAY_SERVICE_NAME"; then
+  systemctl restart "$GATEWAY_SERVICE_NAME"
 fi
 
 echo "$REMOTE_SHA" > "$STATE_FILE"
