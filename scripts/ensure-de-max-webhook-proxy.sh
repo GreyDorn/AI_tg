@@ -12,6 +12,9 @@ if [[ ! -f "$NGINX_SITE" ]]; then
   exit 1
 fi
 
+# Broken include of a deleted snippet causes 502 on /ai-gpt/.
+sed -i.bak '/include\s\+.*ai-gpt.*\.conf/d' "$NGINX_SITE" 2>/dev/null || true
+
 export NGINX_SITE MARKER RU_MAX_UPSTREAM NGINX_SCAN_DIRS
 
 python3 - <<'PY'
