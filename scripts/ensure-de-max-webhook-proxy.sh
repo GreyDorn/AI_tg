@@ -24,15 +24,21 @@ upstream = os.environ["RU_MAX_UPSTREAM"].rstrip("/")
 
 text = path.read_text()
 
-# Drop managed duplicate blocks entirely.
+# Remove marker-managed blocks.
 while marker in text:
     start = text.index(marker)
     rest = text[start:]
     m = re.match(r"(?s).*?\n    \}\n", rest)
-    if not m:
-        text = text[:start] + rest.lstrip()
-        break
-    text = text[:start] + rest[m.end():]
+    text = text[:start] + (rest[m.end():] if m else "")
+
+# Remove any location block whose header mentions /ai-gpt/
+loc_re = re.compile(
+    r"\n    location(?: \^~)? /ai-gpt/.*?\n    \}\n",
+    re.DOTALL,
+)
+text, removed = loc_re.subn("\n", text)
+if removed:
+    print(f"Removed {removed} old /ai-gpt/ location block(s)")
 
 managed_block = f"""    {marker}
     location ^~ /ai-gpt/ {{
@@ -49,45 +55,11 @@ managed_block = f"""    {marker}
 
 """
 
-if "location ^~ /ai-gpt/" not in text:
-    anchor = "    location ^~ /uploads/ {"
-    if anchor not in text:
-        raise SystemExit("No anchor for /ai-gpt/ insert")
-    text = text.replace(anchor, managed_block + anchor, 1)
-    print("Inserted /ai-gpt/ proxy")
-else:
-    # Fix proxy_pass in the first /ai-gpt/ block.
-    pattern = r"(location \^~ /ai-gpt/\s*\{)(.*?)(\n    \})"
-
-    def fix_block(m: re.Match) -> str:
-        body = m.group(2)
-        body = re.sub(
-            r"proxy_pass\s+[^;]+;",
-            f"proxy_pass {upstream}/;",
-            body,
-            count=1,
-        )
-        if "proxy_set_header X-Max-Bot-Api-Secret" not in body:
-            body = body.replace(
-                "proxy_set_header X-Forwarded-Proto $scheme;",
-                "proxy_set_header X-Forwarded-Proto $scheme;\n"
-                "        proxy_set_header X-Max-Bot-Api-Secret $http_x_max_bot_api_secret;",
-            )
-        return m.group(1) + body + m.group(3)
-
-    new_text, n = re.subn(pattern, fix_block, text, count=1, flags=re.DOTALL)
-    if n:
-        text = new_text
-        print("Updated /ai-gpt/ proxy_pass →", upstream)
-    else:
-        print("WARN: /ai-gpt/ present but block not patched")
-
-# Remove extra duplicate /ai-gpt/ blocks (keep first only).
-blocks = list(re.finditer(r"location \^~ /ai-gpt/\s*\{.*?\n    \}", text, flags=re.DOTALL))
-if len(blocks) > 1:
-    for b in reversed(blocks[1:]):
-        text = text[: b.start()] + text[b.end() :]
-    print("Removed", len(blocks) - 1, "duplicate /ai-gpt/ block(s)")
+anchor = "    location ^~ /uploads/ {"
+if anchor not in text:
+    raise SystemExit("No anchor for /ai-gpt/ insert")
+text = text.replace(anchor, managed_block + anchor, 1)
+print("Installed single /ai-gpt/ proxy →", upstream)
 
 path.write_text(text)
 PY
