@@ -23,22 +23,39 @@ marker = os.environ["MARKER"]
 upstream = os.environ["RU_MAX_UPSTREAM"].rstrip("/")
 
 text = path.read_text()
+lines = text.splitlines(keepends=True)
 
-# Remove marker-managed blocks.
-while marker in text:
-    start = text.index(marker)
-    rest = text[start:]
-    m = re.match(r"(?s).*?\n    \}\n", rest)
-    text = text[:start] + (rest[m.end():] if m else "")
 
-# Remove any location block whose header mentions /ai-gpt/
-loc_re = re.compile(
-    r"\n    location(?: \^~)? /ai-gpt/.*?\n    \}\n",
-    re.DOTALL,
-)
-text, removed = loc_re.subn("\n", text)
+def skip_brace_block(start: int) -> int:
+    depth = 0
+    i = start
+    while i < len(lines):
+        depth += lines[i].count("{") - lines[i].count("}")
+        i += 1
+        if i > start and depth <= 0:
+            break
+    return i
+
+
+out: list[str] = []
+i = 0
+removed = 0
+while i < len(lines):
+    line = lines[i]
+    if marker in line:
+        i = skip_brace_block(i)
+        removed += 1
+        continue
+    if re.search(r"location\s+[^;{]*/ai-gpt/", line):
+        i = skip_brace_block(i)
+        removed += 1
+        continue
+    out.append(line)
+    i += 1
+
+text = "".join(out)
 if removed:
-    print(f"Removed {removed} old /ai-gpt/ location block(s)")
+    print(f"Removed {removed} /ai-gpt/ or managed block(s)")
 
 managed_block = f"""    {marker}
     location ^~ /ai-gpt/ {{
@@ -58,6 +75,8 @@ managed_block = f"""    {marker}
 anchor = "    location ^~ /uploads/ {"
 if anchor not in text:
     raise SystemExit("No anchor for /ai-gpt/ insert")
+if "location" in text and "/ai-gpt/" in text:
+    raise SystemExit("Still has /ai-gpt/ after cleanup — grep nginx site")
 text = text.replace(anchor, managed_block + anchor, 1)
 print("Installed single /ai-gpt/ proxy →", upstream)
 
@@ -72,3 +91,5 @@ curl -sf --max-time 10 "https://vpoiskerabot.ru/ai-gpt/health" && echo || echo F
 
 echo -n "DE → RU direct: "
 curl -sf --max-time 10 "${RU_MAX_UPSTREAM}/health" && echo || echo FAIL
+
+grep -n "ai-gpt" "$NGINX_SITE" || true
