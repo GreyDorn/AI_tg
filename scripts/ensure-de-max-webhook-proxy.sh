@@ -75,8 +75,8 @@ managed_block = f"""    {marker}
 anchor = "    location ^~ /uploads/ {"
 if anchor not in text:
     raise SystemExit("No anchor for /ai-gpt/ insert")
-if "location" in text and "/ai-gpt/" in text:
-    raise SystemExit("Still has /ai-gpt/ after cleanup — grep nginx site")
+if re.search(r"location\s+[^;{]*/ai-gpt/", text):
+    raise SystemExit("Still has /ai-gpt/ location after cleanup — check nginx site")
 text = text.replace(anchor, managed_block + anchor, 1)
 print("Installed single /ai-gpt/ proxy →", upstream)
 
