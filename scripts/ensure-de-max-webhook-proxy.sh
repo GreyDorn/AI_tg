@@ -47,8 +47,13 @@ def strip_ai_gpt_blocks(text: str) -> tuple[str, int]:
             i = skip_brace_block(lines, i)
             removed += 1
             continue
-        if re.search(r"location\s+[^\n]*\/ai-gpt", line):
+        if re.search(r"location\s+[^\n]*\/ai-gpt", line) or (
+            "location" in line and "/ai-gpt" in line
+        ):
             i = skip_brace_block(lines, i)
+            removed += 1
+            continue
+        if re.search(r"^\s*include\s+[^\n]*ai-gpt[^\n]*;\s*$", line, re.I):
             removed += 1
             continue
         out.append(line)
@@ -139,6 +144,11 @@ def insert_managed_block(text: str) -> str:
     return "".join(out)
 
 
+for snippet in Path("/etc/nginx/snippets").glob("*ai-gpt*"):
+    if snippet.is_file():
+        print(f"Removing snippet file {snippet}")
+        snippet.unlink()
+
 config_files = iter_nginx_configs()
 total_removed = 0
 for cfg in config_files:
@@ -158,8 +168,17 @@ if total_removed:
     print(f"Total removed blocks: {total_removed}")
 
 text = site_path.read_text()
-if has_ai_gpt_location(text):
-    raise SystemExit(f"Still has /ai-gpt/ location in {site_path} after cleanup")
+if has_ai_gpt_location(text) or re.search(r"include\s+[^\n]*ai-gpt", text, re.I):
+    print("Remaining ai-gpt references in site file:")
+    for n, ln in enumerate(text.splitlines(), 1):
+        if "/ai-gpt" in ln or re.search(r"include\s+[^\n]*ai-gpt", ln, re.I):
+            print(f"  {n}: {ln.rstrip()}")
+    text, extra = strip_ai_gpt_blocks(text)
+    if extra:
+        print(f"Extra cleanup removed {extra} block(s) from {site_path}")
+        site_path.write_text(text)
+if has_ai_gpt_location(text) or re.search(r"include\s+[^\n]*ai-gpt", text, re.I):
+    raise SystemExit(f"Still has /ai-gpt/ in {site_path} after cleanup")
 
 text = insert_managed_block(text)
 if not has_ai_gpt_location(text):
