@@ -16,8 +16,8 @@ THINKING_TAGS = (
 COMPOUND_MODEL_IDS = frozenset({"groq/compound", "groq/compound-mini"})
 GPT_OSS_MODEL_IDS = frozenset({"openai/gpt-oss-20b", "openai/gpt-oss-120b"})
 QWEN_MODEL_IDS = frozenset({"qwen/qwen3.6-27b", "qwen/qwen3.8-27b"})
-# Groq on_demand OTPM rejects high max_tokens on Qwen (429 before generation).
-QWEN_MAX_TOKENS = 1024
+# Groq on_demand OTPM is 1000; max_tokens above that is rejected with 429.
+QWEN_MAX_TOKENS = 512
 DEFAULT_MAX_TOKENS = 4096
 COMPOUND_SYSTEM_PROMPT = (
     CHAT_SYSTEM_PROMPT + "\n\n"
