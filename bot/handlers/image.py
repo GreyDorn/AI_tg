@@ -10,7 +10,7 @@ from db.repository import spend_credits, update_user_image_model, set_waiting_fo
 from llm.image_gen import generate_image, ImageGenerationError
 from llm.provider_status import resolve_image_model_key
 from bot.keyboards.main import image_models_keyboard, cancel_keyboard, image_share_keyboard
-from bot.i18n import all_menu_button_texts, button_filter, format_cost, image_viral_footer, resolve_lang, t
+from bot.i18n import all_menu_button_texts, button_filter, format_model_cost_suffix, image_viral_footer, resolve_lang, t
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -58,8 +58,8 @@ def _extension_for_mime(mime_type: str) -> str:
     }.get(mime_type, "png")
 
 
-def _format_cost(cost: int, lang: str) -> str:
-    return format_cost(cost, lang)
+def _format_cost_suffix(cost: int, lang: str) -> str:
+    return format_model_cost_suffix(cost, lang)
 
 
 def _get_image_model(db_user: User) -> tuple[str, object]:
@@ -81,12 +81,12 @@ async def _set_waiting(
 async def _show_image_help(message: Message, db_user: User, waiting: bool = False, lang: str | None = None) -> None:
     lang = lang or resolve_lang(db_user)
     model_key, model_cfg = _get_image_model(db_user)
-    cost = _format_cost(model_cfg.cost_per_image, lang)
+    cost_suffix = _format_cost_suffix(model_cfg.cost_per_image, lang)
 
     if waiting:
-        text = t("image_help_waiting", lang, model=model_cfg.name, cost=cost)
+        text = t("image_help_waiting", lang, model=model_cfg.name, cost_suffix=cost_suffix)
     else:
-        text = t("image_help", lang, model=model_cfg.name, cost=cost)
+        text = t("image_help", lang, model=model_cfg.name, cost_suffix=cost_suffix)
     await message.answer(
         text,
         parse_mode="HTML",

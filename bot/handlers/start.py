@@ -4,7 +4,16 @@ from aiogram.filters import CommandStart, Command
 from aiogram.types import Message
 from aiogram.exceptions import TelegramForbiddenError
 from sqlalchemy.ext.asyncio import AsyncSession
-from config import FREE_CREDITS_ON_START, DAILY_FREE_CREDITS, REFERRAL_BONUS_CREDITS, SUBSCRIPTION_PRICE_STARS, IMAGE_MODELS, MUSIC_MODELS, MODELS
+from config import (
+    MONETIZATION_ENABLED,
+    FREE_CREDITS_ON_START,
+    DAILY_FREE_CREDITS,
+    REFERRAL_BONUS_CREDITS,
+    SUBSCRIPTION_PRICE_STARS,
+    IMAGE_MODELS,
+    MUSIC_MODELS,
+    MODELS,
+)
 from llm.music_gen import is_music_feature_enabled
 from db.models import User
 from db.repository import (
@@ -15,7 +24,7 @@ from db.repository import (
     get_user,
 )
 from bot.keyboards.main import main_menu, growth_keyboard
-from bot.i18n import t, button_filter, format_cost, milestone_label, resolve_lang
+from bot.i18n import t, button_filter, format_model_cost_suffix, milestone_label, resolve_lang
 from bot.utils.growth import (
     referral_link,
     invite_dashboard_text,
@@ -36,31 +45,38 @@ async def cmd_start(
     lang: str = "en",
 ) -> None:
     bot_info = await message.bot.get_me()
-    ref_line = t("start_ref_line", lang, bonus=REFERRAL_BONUS_CREDITS)
-    welcome_extra = ""
-    if is_new_user and db_user.referred_by:
-        welcome_extra = t("start_referred", lang, credits=FREE_CREDITS_ON_START)
-
     music_line = ""
     if is_music_feature_enabled():
         music_line = t("start_music_line", lang)
 
-    await message.answer(
-        t(
-            "start_welcome",
-            lang,
+    if MONETIZATION_ENABLED:
+        ref_line = t("start_ref_line", lang, bonus=REFERRAL_BONUS_CREDITS)
+        welcome_extra = ""
+        if is_new_user and db_user.referred_by:
+            welcome_extra = t("start_referred", lang, credits=FREE_CREDITS_ON_START)
+        welcome_key = "start_welcome"
+        welcome_kwargs = dict(
             name=message.from_user.first_name,
             free_start=FREE_CREDITS_ON_START,
             daily=DAILY_FREE_CREDITS,
             welcome_extra=welcome_extra,
             music_line=music_line,
             ref_line=ref_line,
-        ),
+        )
+    else:
+        welcome_key = "start_welcome_free"
+        welcome_kwargs = dict(
+            name=message.from_user.first_name,
+            music_line=music_line,
+        )
+
+    await message.answer(
+        t(welcome_key, lang, **welcome_kwargs),
         parse_mode="HTML",
         reply_markup=main_menu(lang),
     )
 
-    if is_new_user:
+    if MONETIZATION_ENABLED and is_new_user:
         ref_link = referral_link(bot_info.username, db_user.id)
         await message.answer(
             invite_dashboard_text(ref_link, 0, db_user.credits, 0, lang),
@@ -118,8 +134,7 @@ async def cmd_help(message: Message, lang: str = "en") -> None:
         for m in MODELS.values()
     )
     image_models_text = "\n".join(
-        f"• <b>{m.name}</b> — {m.description}"
-        + (f" ({format_cost(m.cost_per_image, lang)})" if m.cost_per_image else f" ({format_cost(0, lang)})")
+        f"• <b>{m.name}</b> — {m.description}{format_model_cost_suffix(m.cost_per_image, lang)}"
         for m in IMAGE_MODELS.values()
     )
     music_section = ""
@@ -127,16 +142,15 @@ async def cmd_help(message: Message, lang: str = "en") -> None:
     if is_music_feature_enabled():
         music_models_text = "\n".join(
             f"• <b>{m.name}</b> — {m.description}"
-            + (f" ({format_cost(m.cost_per_track, lang)})" if m.cost_per_track else f" ({format_cost(0, lang)})")
-            + f", ~{m.duration_seconds}s"
+            f"{format_model_cost_suffix(m.cost_per_track, lang)}, ~{m.duration_seconds}s"
             for m in MUSIC_MODELS.values()
         )
         music_commands = t("help_music_commands", lang)
         music_section = t("help_music_section", lang, models=music_models_text)
-    await message.answer(
-        t(
-            "help",
-            lang,
+
+    if MONETIZATION_ENABLED:
+        help_key = "help"
+        help_kwargs = dict(
             music_commands=music_commands,
             models_text=models_text,
             image_models_text=image_models_text,
@@ -145,7 +159,18 @@ async def cmd_help(message: Message, lang: str = "en") -> None:
             daily=DAILY_FREE_CREDITS,
             bonus=REFERRAL_BONUS_CREDITS,
             price=SUBSCRIPTION_PRICE_STARS,
-        ),
+        )
+    else:
+        help_key = "help_free"
+        help_kwargs = dict(
+            music_commands=music_commands,
+            models_text=models_text,
+            image_models_text=image_models_text,
+            music_section=music_section,
+        )
+
+    await message.answer(
+        t(help_key, lang, **help_kwargs),
         parse_mode="HTML",
     )
 

@@ -1,4 +1,5 @@
 from datetime import datetime
+from config import MONETIZATION_ENABLED
 from sqlalchemy import BigInteger, String, Integer, DateTime, ForeignKey, Text, Boolean, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -35,6 +36,8 @@ class User(Base):
     @property
     def has_unlimited_access(self) -> bool:
         """True если у пользователя безлимитный доступ (постоянный или по подписке)."""
+        if not MONETIZATION_ENABLED:
+            return True
         if self.is_unlimited:
             return True
         if self.subscription_until and self.subscription_until > datetime.now():
