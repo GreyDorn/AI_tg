@@ -5,14 +5,14 @@ set -euo pipefail
 RU_MAX_UPSTREAM="${RU_MAX_UPSTREAM:-http://195.133.73.52:8090}"
 NGINX_SITE="${NGINX_SITE:-/etc/nginx/sites-available/vpoiskerabot.ru}"
 MARKER="# MAX bot webhook proxy (managed by ensure-de-max-webhook-proxy.sh)"
-NGINX_ENABLED_DIR="${NGINX_ENABLED_DIR:-/etc/nginx/sites-enabled}"
+NGINX_SCAN_DIRS="${NGINX_SCAN_DIRS:-/etc/nginx/sites-enabled /etc/nginx/sites-available /etc/nginx/conf.d /etc/nginx/snippets}"
 
 if [[ ! -f "$NGINX_SITE" ]]; then
   echo "NGINX site not found: $NGINX_SITE"
   exit 1
 fi
 
-export NGINX_SITE MARKER RU_MAX_UPSTREAM NGINX_ENABLED_DIR
+export NGINX_SITE MARKER RU_MAX_UPSTREAM NGINX_SCAN_DIRS
 
 python3 - <<'PY'
 import os
@@ -22,7 +22,7 @@ from pathlib import Path
 marker = os.environ["MARKER"]
 upstream = os.environ["RU_MAX_UPSTREAM"].rstrip("/")
 site_path = Path(os.environ["NGINX_SITE"])
-enabled_dir = Path(os.environ["NGINX_ENABLED_DIR"])
+scan_roots = [Path(p.strip()) for p in os.environ["NGINX_SCAN_DIRS"].split() if p.strip()]
 
 
 def skip_brace_block(lines: list[str], start: int) -> int:
@@ -47,7 +47,7 @@ def strip_ai_gpt_blocks(text: str) -> tuple[str, int]:
             i = skip_brace_block(lines, i)
             removed += 1
             continue
-        if re.search(r"location\s+.*\/ai-gpt", line):
+        if re.search(r"location\s+[^\n]*\/ai-gpt", line):
             i = skip_brace_block(lines, i)
             removed += 1
             continue
@@ -57,23 +57,89 @@ def strip_ai_gpt_blocks(text: str) -> tuple[str, int]:
 
 
 def has_ai_gpt_location(text: str) -> bool:
-    return bool(re.search(r"location\s+.*\/ai-gpt", text))
+    return bool(re.search(r"location\s+[^\n]*\/ai-gpt", text))
 
 
-# Remove /ai-gpt/ from every enabled site (avoids duplicate location across includes).
-config_files: list[Path] = []
-for path in sorted(enabled_dir.iterdir()):
-    if not path.is_file():
-        continue
-    try:
-        real = path.resolve()
-    except OSError:
-        real = path
-    if real.is_file() and real not in config_files:
-        config_files.append(real)
-if site_path.resolve() not in config_files and site_path.is_file():
-    config_files.append(site_path.resolve())
+def iter_nginx_configs() -> list[Path]:
+    seen: set[Path] = set()
+    out: list[Path] = []
+    for root in scan_roots:
+        if not root.exists():
+            continue
+        if root.is_file():
+            candidates = [root]
+        else:
+            candidates = list(root.rglob("*"))
+        for path in candidates:
+            if not path.is_file():
+                continue
+            if path.suffix not in ("", ".conf"):
+                continue
+            try:
+                real = path.resolve()
+            except OSError:
+                real = path
+            if real in seen:
+                continue
+            seen.add(real)
+            out.append(real)
+    return out
 
+
+def insert_managed_block(text: str) -> str:
+    if marker in text and has_ai_gpt_location(text):
+        # Already installed in this file.
+        return text
+
+    managed_block = f"""    {marker}
+    location ^~ /ai-gpt/ {{
+        proxy_pass {upstream}/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Max-Bot-Api-Secret $http_x_max_bot_api_secret;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }}
+
+"""
+    lines = text.splitlines(keepends=True)
+    out: list[str] = []
+    i = 0
+    inserted = False
+    while i < len(lines):
+        line = lines[i]
+        if (
+            not inserted
+            and re.search(r"server_name\b", line)
+            and "vpoiskerabot.ru" in line
+        ):
+            out.append(line)
+            i += 1
+            while i < len(lines):
+                out.append(lines[i])
+                if lines[i].strip() == "{":
+                    out.append("\n" + managed_block)
+                    inserted = True
+                    i += 1
+                    break
+                i += 1
+            continue
+        out.append(line)
+        i += 1
+
+    if not inserted:
+        anchor = "    location ^~ /uploads/ {"
+        joined = "".join(out)
+        if anchor not in joined:
+            raise SystemExit("Cannot insert /ai-gpt/ proxy (no server_name or /uploads/ anchor)")
+        return joined.replace(anchor, managed_block + anchor, 1)
+    return "".join(out)
+
+
+config_files = iter_nginx_configs()
 total_removed = 0
 for cfg in config_files:
     try:
@@ -93,54 +159,45 @@ if total_removed:
 
 text = site_path.read_text()
 if has_ai_gpt_location(text):
-    raise SystemExit(f"Still has /ai-gpt/ in {site_path} after cleanup")
+    raise SystemExit(f"Still has /ai-gpt/ location in {site_path} after cleanup")
 
-managed_block = f"""    {marker}
-    location ^~ /ai-gpt/ {{
-        proxy_pass {upstream}/;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Max-Bot-Api-Secret $http_x_max_bot_api_secret;
-        proxy_read_timeout 300s;
-        proxy_send_timeout 300s;
-    }}
+text = insert_managed_block(text)
+if not has_ai_gpt_location(text):
+    raise SystemExit("Managed /ai-gpt/ block missing after insert")
 
-"""
+# Exactly one location in vpoiskerabot site file.
+locs = re.findall(r"location\s+[^\n]*\/ai-gpt", text)
+if len(locs) != 1:
+    raise SystemExit(f"Expected 1 /ai-gpt/ location in {site_path}, found {len(locs)}: {locs}")
 
-anchor = "    location ^~ /uploads/ {"
-if anchor not in text:
-    raise SystemExit("No anchor for /ai-gpt/ insert")
-text = text.replace(anchor, managed_block + anchor, 1)
-print("Installed single /ai-gpt/ proxy →", upstream)
 site_path.write_text(text)
+print("Installed single /ai-gpt/ proxy →", upstream)
 
-# Fail if any enabled config still defines /ai-gpt/ besides our managed block.
-for cfg in config_files:
+for cfg in iter_nginx_configs():
     if cfg == site_path.resolve():
         continue
-    t = cfg.read_text()
+    try:
+        t = cfg.read_text()
+    except OSError:
+        continue
     if has_ai_gpt_location(t):
         raise SystemExit(f"Duplicate /ai-gpt/ location remains in {cfg}")
 PY
 
-# Stray MAX bot on DE would answer webhooks locally instead of RU.
 if systemctl is-active max_ai_bot.service >/dev/null 2>&1; then
   echo "Stopping local max_ai_bot.service on DE (MAX runs on RU only)"
   systemctl stop max_ai_bot.service || true
   systemctl disable max_ai_bot.service || true
 fi
 
+echo "All /ai-gpt/ location directives under nginx:"
+grep -Rn "location[^;]*\/ai-gpt" /etc/nginx/sites-enabled /etc/nginx/sites-available /etc/nginx/conf.d /etc/nginx/snippets 2>/dev/null || true
+
 nginx -t
 systemctl reload nginx
 
 echo "Effective nginx /ai-gpt/ (must proxy to RU):"
 nginx -T 2>/dev/null | grep -E "location.*ai-gpt|proxy_pass.*8090" || true
-
-echo "ai-gpt lines in nginx enabled:"
-grep -rn "/ai-gpt" "$NGINX_ENABLED_DIR/" || true
 
 echo -n "RU upstream health: "
 curl -sf --max-time 10 "${RU_MAX_UPSTREAM}/health" && echo || echo FAIL
