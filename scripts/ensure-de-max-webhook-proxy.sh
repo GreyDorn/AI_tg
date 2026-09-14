@@ -47,9 +47,7 @@ def strip_ai_gpt_blocks(text: str) -> tuple[str, int]:
             i = skip_brace_block(lines, i)
             removed += 1
             continue
-        if re.search(r"location\s+[^\n]*\/ai-gpt", line) or (
-            "location" in line and "/ai-gpt" in line
-        ):
+        if is_ai_gpt_location_line(line):
             i = skip_brace_block(lines, i)
             removed += 1
             continue
@@ -61,8 +59,17 @@ def strip_ai_gpt_blocks(text: str) -> tuple[str, int]:
     return "".join(out), removed
 
 
+def is_ai_gpt_location_line(line: str) -> bool:
+    stripped = line.strip()
+    if stripped.startswith("#"):
+        return False
+    return bool(re.search(r"location\s+[^\n]*\/ai-gpt", line)) or (
+        "location" in line and "/ai-gpt" in line
+    )
+
+
 def has_ai_gpt_location(text: str) -> bool:
-    return bool(re.search(r"location\s+[^\n]*\/ai-gpt", text))
+    return any(is_ai_gpt_location_line(line) for line in text.splitlines())
 
 
 def iter_nginx_configs() -> list[Path]:
@@ -184,8 +191,8 @@ text = insert_managed_block(text)
 if not has_ai_gpt_location(text):
     raise SystemExit("Managed /ai-gpt/ block missing after insert")
 
-# Exactly one location in vpoiskerabot site file.
-locs = re.findall(r"location\s+[^\n]*\/ai-gpt", text)
+# Exactly one active location in vpoiskerabot site file.
+locs = [ln.strip() for ln in text.splitlines() if is_ai_gpt_location_line(ln)]
 if len(locs) != 1:
     raise SystemExit(f"Expected 1 /ai-gpt/ location in {site_path}, found {len(locs)}: {locs}")
 
